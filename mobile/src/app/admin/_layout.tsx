@@ -1,0 +1,23 @@
+import { Stack } from 'expo-router';
+import React from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AC } from '@/constants/adminTheme';
+
+export default function AdminLayout() {
+  return (
+    <SafeAreaProvider>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: AC.bgApp },
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="service-status" />
+        <Stack.Screen name="system-health" />
+        <Stack.Screen name="alerts" />
+        <Stack.Screen name="issue-details" options={{ animation: 'slide_from_right' }} />
+      </Stack>
+    </SafeAreaProvider>
+  );
+}
