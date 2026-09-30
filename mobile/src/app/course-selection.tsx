@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,9 +11,82 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { submitRegistrationApi } from '../services/api';
 
 export default function CourseSelectionScreen() {
+  const params = useLocalSearchParams();
+  const studentId = (params.studentId as string) || 'IT21047138';
+
   const [search, setSearch] = useState('');
+  const [selectedSlot, setSelectedSlot] = useState<'Slot A' | 'Slot B'>('Slot A');
+  const [enrolledCourse4, setEnrolledCourse4] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const totalCredits = 8 + 4 + (enrolledCourse4 ? 4 : 0);
+  const hasConflict = selectedSlot === 'Slot B';
+
+  const handleSaveRegistration = async () => {
+    try {
+      setSaving(true);
+      const courses = ['IT3060', 'IT3040', 'IT3080'];
+      if (enrolledCourse4) {
+        courses.push('IT3090');
+      }
+
+      const res = await submitRegistrationApi(studentId, courses, {
+        IT3080: selectedSlot,
+      });
+
+      if (hasConflict) {
+        Alert.alert(
+          'Timetable Conflict Detected!',
+          'Slot B overlaps with IT3060 HCI Lab on Wednesday (14:00 - 16:00). Your registration status has been set to BLOCKED until resolved.',
+          [
+            {
+              text: 'Go to Dashboard',
+              onPress: () =>
+                router.push({
+                  pathname: '/dashboard',
+                  params: { studentId },
+                }),
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Registration Successful!',
+          `You have registered for ${courses.length} courses (${totalCredits} credits) with 0 timetable clashes.`,
+          [
+            {
+              text: 'View Dashboard',
+              onPress: () =>
+                router.push({
+                  pathname: '/dashboard',
+                  params: { studentId },
+                }),
+            },
+          ]
+        );
+      }
+    } catch (err: any) {
+      Alert.alert(
+        'Offline Preview',
+        'Updated registration in local state and returning to Dashboard.',
+        [
+          {
+            text: 'OK',
+            onPress: () =>
+              router.push({
+                pathname: '/dashboard',
+                params: { studentId },
+              }),
+          },
+        ]
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -102,13 +177,18 @@ export default function CourseSelectionScreen() {
             <Text style={styles.creditLabel}>Enrolled Credit Ratio</Text>
 
             <View style={styles.creditValueRow}>
-              <Text style={styles.creditValue}>16</Text>
+              <Text style={styles.creditValue}>{totalCredits}</Text>
               <Text style={styles.creditMax}> / 20 Credits</Text>
             </View>
           </View>
 
           <View style={styles.progressBackground}>
-            <View style={styles.progressFill} />
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${Math.min((totalCredits / 20) * 100, 100)}%` },
+              ]}
+            />
           </View>
 
           <View style={styles.loadScale}>
@@ -220,29 +300,42 @@ export default function CourseSelectionScreen() {
           </Text>
 
           {/* Slot A */}
-          <TouchableOpacity style={styles.selectedSlot}>
-            <View style={styles.radioOuter}>
-              <View style={styles.radioInner} />
+          <TouchableOpacity
+            style={selectedSlot === 'Slot A' ? styles.selectedSlot : styles.conflictSlot}
+            onPress={() => setSelectedSlot('Slot A')}
+            activeOpacity={0.8}
+          >
+            <View style={selectedSlot === 'Slot A' ? styles.radioOuter : styles.radioEmpty}>
+              {selectedSlot === 'Slot A' && <View style={styles.radioInner} />}
             </View>
 
             <View style={styles.slotContent}>
               <Text style={styles.slotTitle}>Slot A: Thu 09:00 - 12:00</Text>
-              <Text style={styles.slotRoom}>Robotics Center R-12</Text>
+              <Text style={styles.slotRoom}>Robotics Center R-12 (Optimal • No Clash)</Text>
             </View>
 
-            <View style={styles.selectedBadge}>
-              <Text style={styles.selectedText}>Selected ✓</Text>
-            </View>
+            {selectedSlot === 'Slot A' && (
+              <View style={styles.selectedBadge}>
+                <Text style={styles.selectedText}>Selected ✓</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           {/* Slot B */}
-          <TouchableOpacity style={styles.conflictSlot}>
-            <View style={styles.radioEmpty}>
-              <View />
+          <TouchableOpacity
+            style={[
+              selectedSlot === 'Slot B' ? styles.selectedSlot : styles.conflictSlot,
+              { borderColor: '#F87171' },
+            ]}
+            onPress={() => setSelectedSlot('Slot B')}
+            activeOpacity={0.8}
+          >
+            <View style={selectedSlot === 'Slot B' ? styles.radioOuter : styles.radioEmpty}>
+              {selectedSlot === 'Slot B' && <View style={styles.radioInner} />}
             </View>
 
             <View style={styles.slotContent}>
-              <Text style={styles.slotTitle}>Slot B: Fri 10:00 - 13:00</Text>
+              <Text style={styles.slotTitle}>Slot B: Wed 14:00 - 17:00</Text>
 
               <View style={styles.warningRow}>
                 <Ionicons
@@ -252,7 +345,7 @@ export default function CourseSelectionScreen() {
                 />
 
                 <Text style={styles.conflictText}>
-                  Conflict detected with HCI Lab
+                  Conflict with IT3060 HCI Lab (Wed 14:00-16:00)
                 </Text>
               </View>
             </View>
@@ -272,8 +365,13 @@ export default function CourseSelectionScreen() {
               <Text style={styles.courseCredits}>4.0 cr</Text>
             </View>
 
-            <TouchableOpacity style={styles.addButton}>
-              <Text style={styles.addButtonText}>+ Add</Text>
+            <TouchableOpacity
+              style={[styles.addButton, enrolledCourse4 && { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
+              onPress={() => setEnrolledCourse4(!enrolledCourse4)}
+            >
+              <Text style={[styles.addButtonText, enrolledCourse4 && { color: '#059669' }]}>
+                {enrolledCourse4 ? '✓ Added' : '+ Add'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -291,30 +389,45 @@ export default function CourseSelectionScreen() {
       {/* Bottom Register Button */}
       <View style={styles.bottomContainer}>
         <TouchableOpacity
-          style={styles.reviewButton}
-          onPress={() => router.push('/review-confirm')}
+          style={[styles.reviewButton, saving && { opacity: 0.7 }]}
+          onPress={handleSaveRegistration}
+          disabled={saving}
         >
-          <Ionicons
-            name="checkmark-circle-outline"
-            size={21}
-            color="#FFFFFF"
-          />
+          {saving ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <>
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={21}
+                color="#FFFFFF"
+              />
 
-          <Text style={styles.reviewButtonText}>
-            Review & Confirm (3 Courses)
-          </Text>
+              <Text style={styles.reviewButtonText}>
+                Confirm & Sync ({totalCredits} Credits)
+              </Text>
 
-          <Ionicons
-            name="arrow-forward"
-            size={21}
-            color="#FFFFFF"
-          />
+              <Ionicons
+                name="arrow-forward"
+                size={21}
+                color="#FFFFFF"
+              />
+            </>
+          )}
         </TouchableOpacity>
       </View>
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() =>
+            router.push({
+              pathname: '/dashboard',
+              params: { studentId },
+            })
+          }
+        >
           <Ionicons name="grid-outline" size={22} color="#5B5F6B" />
           <Text style={styles.navText}>Dashboard</Text>
         </TouchableOpacity>

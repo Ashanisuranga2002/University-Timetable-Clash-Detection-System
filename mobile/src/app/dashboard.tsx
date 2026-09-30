@@ -1,5 +1,8 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -7,10 +10,85 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { fetchDashboardApi } from '../services/api';
 
 export default function DashboardScreen() {
   const { width, height } = useWindowDimensions();
   const isCompact = width < 430 || height < 860;
+
+  const params = useLocalSearchParams();
+  const studentId = (params.studentId as string) || 'IT21047138';
+
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadDashboard = async () => {
+    try {
+      const res = await fetchDashboardApi(studentId);
+      if (res?.success) {
+        setDashboardData(res);
+      }
+    } catch (err: any) {
+      console.warn('Dashboard fetch error:', err.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboard();
+  }, [studentId]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadDashboard();
+  };
+
+  const student = dashboardData?.student || {
+    name: 'Alex Perera',
+    studentId: 'IT21047138',
+    programme: 'BSc (Hons) in Information Technology',
+    semester: 3,
+    initials: 'AP',
+  };
+
+  const academics = dashboardData?.academics || {
+    registeredCount: 4,
+    totalCredits: 16,
+    maxCredits: 20,
+    creditPercentage: 80,
+    status: 'confirmed',
+  };
+
+  const clashes = dashboardData?.clashes || {
+    hasClashes: false,
+    count: 0,
+    items: [],
+  };
+
+  const scheduleList =
+    dashboardData?.schedule && dashboardData.schedule.length > 0
+      ? dashboardData.schedule.slice(0, 3)
+      : [
+          {
+            id: '1',
+            time: '09:00 - 11:00 AM',
+            tag: 'LAB',
+            courseCode: 'IT3060',
+            courseName: 'Human Computer Interaction',
+            location: 'Computing Block C • Lab 04',
+          },
+          {
+            id: '2',
+            time: '13:30 - 15:30 PM',
+            tag: 'LECTURE',
+            courseCode: 'IT3040',
+            courseName: 'Cloud Computing Systems',
+            location: 'Main Complex • Hall 3A',
+          },
+        ];
 
   return (
     <View style={styles.container}>
@@ -20,6 +98,9 @@ export default function DashboardScreen() {
           isCompact && styles.scrollContentCompact,
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />
+        }
       >
         <View style={[styles.topBar, isCompact && styles.topBarCompact]}>
           <View style={styles.profileRow}>
@@ -30,7 +111,7 @@ export default function DashboardScreen() {
                   isCompact && styles.avatarTextCompact,
                 ]}
               >
-                AP
+                {student.initials || 'ST'}
               </Text>
             </View>
 
@@ -49,7 +130,7 @@ export default function DashboardScreen() {
                     isCompact && styles.campusTextCompact,
                   ]}
                 >
-                  CAMPUS US-EAST
+                  {student.studentId} • SEM {student.semester}
                 </Text>
               </View>
 
@@ -59,7 +140,7 @@ export default function DashboardScreen() {
                   isCompact && styles.userNameCompact,
                 ]}
               >
-                Alex Perera
+                {student.name}
               </Text>
             </View>
           </View>
@@ -138,7 +219,7 @@ export default function DashboardScreen() {
               <View>
                 {!isCompact ? (
                   <Text style={styles.heroEyebrow}>
-                    FALL 2025 REGISTRATION
+                    SEMESTER {student.semester} ENROLLMENT
                   </Text>
                 ) : null}
 
@@ -157,24 +238,26 @@ export default function DashboardScreen() {
               style={[
                 styles.operationalBadge,
                 isCompact && styles.operationalBadgeCompact,
+                clashes.hasClashes && { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
               ]}
             >
-              <View style={styles.greenDotSmall} />
+              <View style={[styles.greenDotSmall, clashes.hasClashes && { backgroundColor: '#DC2626' }]} />
 
               <Text
                 style={[
                   styles.operationalText,
                   isCompact && styles.operationalTextCompact,
+                  clashes.hasClashes && { color: '#DC2626' },
                 ]}
               >
-                OPERATIONAL / OPEN
+                {clashes.hasClashes ? 'CLASH DETECTED' : 'OPERATIONAL / OPEN'}
               </Text>
             </View>
           </View>
 
           {!isCompact ? (
             <Text style={styles.heroMeta}>
-              Deadline: Aug 29 • 1 elective pending selection
+              {student.programme || 'Information Technology'}
             </Text>
           ) : null}
 
@@ -217,14 +300,19 @@ export default function DashboardScreen() {
                     isCompact && styles.creditCountStrongCompact,
                   ]}
                 >
-                  16
+                  {academics.totalCredits}
                 </Text>{' '}
-                / 20 Credits
+                / {academics.maxCredits} Credits
               </Text>
             </View>
 
             <View style={styles.progressTrack}>
-              <View style={styles.progressFill} />
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${Math.min(academics.creditPercentage, 100)}%` },
+                ]}
+              />
             </View>
           </View>
 
@@ -235,7 +323,12 @@ export default function DashboardScreen() {
               isCompact && styles.primaryButtonCompact,
             ]}
             activeOpacity={0.88}
-            onPress={() => router.push('/course-selection')}
+            onPress={() =>
+              router.push({
+                pathname: '/course-selection',
+                params: { studentId },
+              })
+            }
           >
             <Text
               style={[
@@ -267,13 +360,15 @@ export default function DashboardScreen() {
               </View>
             </View>
 
-            <Text style={styles.statValue}>4 Modules</Text>
+            <Text style={styles.statValue}>{academics.registeredCount} Modules</Text>
 
-            <Text style={styles.statSubtext}>Core met</Text>
+            <Text style={styles.statSubtext}>
+              {academics.totalCredits >= 16 ? 'Target achieved' : 'Pending completion'}
+            </Text>
 
             <View style={styles.statFooterRow}>
               <Text style={styles.statFooterLabel}>Credit Load</Text>
-              <Text style={styles.statFooterValue}>80%</Text>
+              <Text style={styles.statFooterValue}>{academics.creditPercentage}%</Text>
             </View>
           </View>
 
@@ -281,97 +376,109 @@ export default function DashboardScreen() {
             <View style={styles.statHeader}>
               <Text style={styles.statLabel}>Timetable</Text>
 
-              <View style={styles.statIconPillGreen}>
-                <Text style={styles.statPillGlyphGreen}>✓</Text>
+              <View
+                style={
+                  clashes.hasClashes
+                    ? styles.statIconPillRed
+                    : styles.statIconPillGreen
+                }
+              >
+                <Text
+                  style={
+                    clashes.hasClashes
+                      ? styles.statPillGlyphRed
+                      : styles.statPillGlyphGreen
+                  }
+                >
+                  {clashes.hasClashes ? '!' : '✓'}
+                </Text>
               </View>
             </View>
 
-            <Text style={[styles.statValue, styles.greenValue]}>
-              No Clashes
+            <Text
+              style={[
+                styles.statValue,
+                clashes.hasClashes ? styles.redValue : styles.greenValue,
+              ]}
+            >
+              {clashes.hasClashes
+                ? `${clashes.count} Clash${clashes.count > 1 ? 'es' : ''}`
+                : 'No Clashes'}
             </Text>
 
             <Text
               style={[
                 styles.statSubtext,
-                styles.greenSubtext,
+                clashes.hasClashes ? styles.redSubtext : styles.greenSubtext,
               ]}
             >
-              Validated & synced
+              {clashes.hasClashes ? 'Overlap in schedule' : 'Validated & synced'}
             </Text>
 
             <View style={styles.statFooterRow}>
-              <Text style={styles.statFooterLabel}>Latency</Text>
-              <Text style={styles.statFooterValueGreen}>
-                0.8s Optimal
+              <Text style={styles.statFooterLabel}>Status</Text>
+              <Text
+                style={
+                  clashes.hasClashes
+                    ? styles.statFooterValueRed
+                    : styles.statFooterValueGreen
+                }
+              >
+                {clashes.hasClashes ? 'Action needed' : 'Optimal'}
               </Text>
             </View>
           </View>
         </View>
 
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Today's Schedule</Text>
-          <Text style={styles.sectionLink}>Full View</Text>
+          <Text style={styles.sectionTitle}>Enrolled Schedule</Text>
+          <Text
+            style={styles.sectionLink}
+            onPress={() =>
+              router.push({
+                pathname: '/course-selection',
+                params: { studentId },
+              })
+            }
+          >
+            Manage Courses
+          </Text>
         </View>
 
-        <View style={styles.scheduleCard}>
-          <View style={styles.scheduleAccent} />
+        {scheduleList.map((item: any, idx: number) => (
+          <View key={item.id || idx} style={styles.scheduleCard}>
+            <View
+              style={[
+                styles.scheduleAccent,
+                idx % 2 === 1 && styles.scheduleAccentGreen,
+              ]}
+            />
 
-          <View style={styles.scheduleBody}>
-            <View style={styles.scheduleTopRow}>
-              <Text style={styles.scheduleTime}>
-                09:00 - 11:00 AM
-              </Text>
+            <View style={styles.scheduleBody}>
+              <View style={styles.scheduleTopRow}>
+                <Text style={styles.scheduleTime}>
+                  {item.day ? `${item.day} • ` : ''}
+                  {item.time}
+                </Text>
 
-              <Text style={styles.scheduleTag}>LAB</Text>
+                <Text
+                  style={[
+                    styles.scheduleTag,
+                    idx % 2 === 1 && styles.scheduleTagGreen,
+                  ]}
+                >
+                  {item.tag || 'CLASS'}
+                </Text>
+              </View>
+
+              <Text style={styles.scheduleCode}>{item.courseCode}</Text>
+
+              <Text style={styles.scheduleTitle}>{item.courseName}</Text>
+
+              <Text style={styles.scheduleLocation}>{item.location}</Text>
             </View>
-
-            <Text style={styles.scheduleCode}>IT3060</Text>
-
-            <Text style={styles.scheduleTitle}>
-              Human Computer Interaction
-            </Text>
-
-            <Text style={styles.scheduleLocation}>
-              Computing Block C • Lab 04
-            </Text>
           </View>
-        </View>
-
-        <View style={styles.scheduleCard}>
-          <View
-            style={[
-              styles.scheduleAccent,
-              styles.scheduleAccentGreen,
-            ]}
-          />
-
-          <View style={styles.scheduleBody}>
-            <View style={styles.scheduleTopRow}>
-              <Text style={styles.scheduleTime}>
-                13:30 - 15:30 PM
-              </Text>
-
-              <Text
-                style={[
-                  styles.scheduleTag,
-                  styles.scheduleTagGreen,
-                ]}
-              >
-                LECTURE
-              </Text>
-            </View>
-
-            <Text style={styles.scheduleCode}>IT3040</Text>
-
-            <Text style={styles.scheduleTitle}>
-              Cloud Computing Systems
-            </Text>
-
-            <Text style={styles.scheduleLocation}>
-              Main Complex • Hall 3A
-            </Text>
-          </View>
-        </View>
+        ))}
 
         <Text style={styles.sectionTitle}>Quick Services</Text>
 
@@ -870,6 +977,10 @@ const styles = StyleSheet.create({
     color: '#19A86B',
   },
 
+  redValue: {
+    color: '#DC2626',
+  },
+
   statSubtext: {
     fontSize: 12.5,
     color: '#6B7280',
@@ -879,6 +990,31 @@ const styles = StyleSheet.create({
 
   greenSubtext: {
     color: '#19A86B',
+  },
+
+  redSubtext: {
+    color: '#DC2626',
+  },
+
+  statIconPillRed: {
+    width: 30,
+    height: 30,
+    borderRadius: 12,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  statPillGlyphRed: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#DC2626',
+  },
+
+  statFooterValueRed: {
+    color: '#DC2626',
+    fontSize: 12,
+    fontWeight: '800',
   },
 
   statFooterRow: {
