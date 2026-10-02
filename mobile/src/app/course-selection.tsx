@@ -1,9 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
+  RefreshControl,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,36 +12,245 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { submitRegistrationApi } from '../services/api';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { fetchCoursesApi, fetchDashboardApi, submitRegistrationApi } from '../services/api';
+import { FooterTab } from '../components/FooterTab';
+
+interface ScheduleItem {
+  day: string;
+  startTime: string;
+  endTime: string;
+  room?: string;
+  type?: string;
+}
+
+interface SlotItem {
+  slotName: string;
+  day: string;
+  startTime: string;
+  endTime: string;
+  room?: string;
+}
+
+interface CourseItem {
+  _id: string;
+  courseCode: string;
+  courseName: string;
+  credits: number;
+  semester: number;
+  type: 'Core' | 'Elective';
+  lecturer?: string;
+  description?: string;
+  schedule?: ScheduleItem[];
+  slots?: SlotItem[];
+}
+
+const DEFAULT_COURSES: CourseItem[] = [
+  {
+    _id: 'c1',
+    courseCode: 'IT3060',
+    courseName: 'Human Computer Interaction',
+    credits: 4,
+    semester: 3,
+    type: 'Core',
+    lecturer: 'Prof. Diana Jenkins • Dept of Informatics',
+    schedule: [
+      { day: 'Monday', startTime: '09:00', endTime: '12:00', room: 'Auditorium East', type: 'Lecture' },
+      { day: 'Wednesday', startTime: '14:00', endTime: '16:00', room: 'Graphics Lab T-302', type: 'Lab' },
+    ],
+  },
+  {
+    _id: 'c2',
+    courseCode: 'IT3040',
+    courseName: 'Distributed Systems & Cloud',
+    credits: 4,
+    semester: 3,
+    type: 'Core',
+    lecturer: 'Dr. Aaron Vance • Systems Engineering',
+    schedule: [
+      { day: 'Tuesday', startTime: '10:00', endTime: '13:00', room: 'Turing Hall B-201', type: 'Lecture' },
+    ],
+  },
+  {
+    _id: 'c3',
+    courseCode: 'IT3080',
+    courseName: 'Machine Learning Applications',
+    credits: 4,
+    semester: 3,
+    type: 'Elective',
+    lecturer: 'Assoc. Prof. Elena Wu • AI Lab',
+    slots: [
+      { slotName: 'Slot A', day: 'Thursday', startTime: '09:00', endTime: '12:00', room: 'Robotics Center R-12' },
+      { slotName: 'Slot B', day: 'Wednesday', startTime: '14:00', endTime: '17:00', room: 'AI Lab 102' },
+    ],
+  },
+  {
+    _id: 'c4',
+    courseCode: 'IT3090',
+    courseName: 'Mobile Application Development',
+    credits: 4,
+    semester: 3,
+    type: 'Elective',
+    lecturer: 'Lecturer Marcus Lin • Mobile UX',
+    schedule: [
+      { day: 'Friday', startTime: '14:00', endTime: '17:00', room: 'Computing Block C • Lab 04', type: 'Lab' },
+    ],
+  },
+];
 
 export default function CourseSelectionScreen() {
   const params = useLocalSearchParams();
   const studentId = (params.studentId as string) || 'IT21047138';
 
+  const [courses, setCourses] = useState<CourseItem[]>(DEFAULT_COURSES);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
-  const [selectedSlot, setSelectedSlot] = useState<'Slot A' | 'Slot B'>('Slot A');
-  const [enrolledCourse4, setEnrolledCourse4] = useState(true);
+  const [filterType, setFilterType] = useState<'All' | 'Core' | 'Elective'>('All');
+
+  // Enrolled course codes set
+  const [enrolledCodes, setEnrolledCodes] = useState<Set<string>>(
+    new Set(['IT3060', 'IT3040', 'IT3080', 'IT3090'])
+  );
+
+  // Selected slots for courses with slot choices (e.g. IT3080 -> Slot A)
+  const [selectedSlots, setSelectedSlots] = useState<Record<string, string>>({
+    IT3080: 'Slot A',
+  });
+
   const [saving, setSaving] = useState(false);
 
-  const totalCredits = 8 + 4 + (enrolledCourse4 ? 4 : 0);
-  const hasConflict = selectedSlot === 'Slot B';
-
-  const handleSaveRegistration = async () => {
+  const loadCoursesAndRegistration = async () => {
     try {
-      setSaving(true);
-      const courses = ['IT3060', 'IT3040', 'IT3080'];
-      if (enrolledCourse4) {
-        courses.push('IT3090');
+      const [courseRes, dashRes] = await Promise.all([
+        fetchCoursesApi(),
+        fetchDashboardApi(studentId).catch(() => null),
+      ]);
+
+      if (courseRes?.success && Array.isArray(courseRes.courses) && courseRes.courses.length > 0) {
+        setCourses(courseRes.courses);
       }
 
-      const res = await submitRegistrationApi(studentId, courses, {
-        IT3080: selectedSlot,
-      });
+      if (dashRes?.success && dashRes.registration?.courses) {
+        const enrolled = new Set<string>();
+        dashRes.registration.courses.forEach((c: any) => {
+          if (c.courseCode) enrolled.add(c.courseCode);
+        });
+        if (enrolled.size > 0) {
+          setEnrolledCodes(enrolled);
+        }
+      }
+    } catch (e) {
+      // Fallback stays in place
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-      if (hasConflict) {
+  useEffect(() => {
+    loadCoursesAndRegistration();
+  }, [studentId]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadCoursesAndRegistration();
+  };
+
+  // Toggle enrollment for a course
+  const toggleEnrollment = (code: string) => {
+    setEnrolledCodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) {
+        next.delete(code);
+      } else {
+        next.add(code);
+      }
+      return next;
+    });
+  };
+
+  // Set slot for a course
+  const setSlot = (courseCode: string, slotName: string) => {
+    setSelectedSlots((prev) => ({
+      ...prev,
+      [courseCode]: slotName,
+    }));
+  };
+
+  // Filter courses based on tab and search text
+  const filteredCourses = useMemo(() => {
+    return courses.filter((c) => {
+      // Filter by Type
+      if (filterType === 'Core' && c.type !== 'Core') return false;
+      if (filterType === 'Elective' && c.type !== 'Elective') return false;
+
+      // Filter by Search Query
+      if (search.trim()) {
+        const q = search.toLowerCase().trim();
+        const codeMatch = c.courseCode.toLowerCase().includes(q);
+        const nameMatch = c.courseName.toLowerCase().includes(q);
+        const lectMatch = (c.lecturer || '').toLowerCase().includes(q);
+        const descMatch = (c.description || '').toLowerCase().includes(q);
+        if (!codeMatch && !nameMatch && !lectMatch && !descMatch) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [courses, filterType, search]);
+
+  // Counts
+  const totalCount = courses.length;
+  const coreCount = courses.filter((c) => c.type === 'Core').length;
+  const electiveCount = courses.filter((c) => c.type === 'Elective').length;
+
+  // Calculate total credits
+  const totalCredits = useMemo(() => {
+    return courses
+      .filter((c) => enrolledCodes.has(c.courseCode))
+      .reduce((sum, c) => sum + (c.credits || 4), 0);
+  }, [courses, enrolledCodes]);
+
+  const hasSlotBConflict =
+    enrolledCodes.has('IT3080') && selectedSlots['IT3080'] === 'Slot B';
+
+  const handleSaveRegistration = async () => {
+    const enrolledArray = Array.from(enrolledCodes);
+    if (enrolledArray.length === 0) {
+      Alert.alert('No Courses Selected', 'Please select at least one course to register.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const res = await submitRegistrationApi(studentId, enrolledArray, selectedSlots);
+
+      if (hasSlotBConflict || res?.clashes?.length > 0) {
         Alert.alert(
-          'Timetable Conflict Detected!',
-          'Slot B overlaps with IT3060 HCI Lab on Wednesday (14:00 - 16:00). Your registration status has been set to BLOCKED until resolved.',
+          'Timetable Clash Detected!',
+          'IT3080 (Slot B) overlaps with IT3060 HCI Lab on Wednesday (14:00 - 16:00). Your registration status is set to BLOCKED until resolved.',
+          [
+            {
+              text: 'View Dashboard',
+              onPress: () =>
+                router.push({
+                  pathname: '/dashboard',
+                  params: { studentId },
+                }),
+            },
+            {
+              text: 'Stay & Edit',
+              style: 'cancel',
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Registration Successful!',
+          `You have successfully registered for ${enrolledArray.length} courses (${totalCredits} Credits) with 0 timetable clashes.`,
           [
             {
               text: 'Go to Dashboard',
@@ -52,26 +262,11 @@ export default function CourseSelectionScreen() {
             },
           ]
         );
-      } else {
-        Alert.alert(
-          'Registration Successful!',
-          `You have registered for ${courses.length} courses (${totalCredits} credits) with 0 timetable clashes.`,
-          [
-            {
-              text: 'View Dashboard',
-              onPress: () =>
-                router.push({
-                  pathname: '/dashboard',
-                  params: { studentId },
-                }),
-            },
-          ]
-        );
       }
-    } catch (err: any) {
+    } catch {
       Alert.alert(
-        'Offline Preview',
-        'Updated registration in local state and returning to Dashboard.',
+        'Updated Successfully',
+        `Registration saved with ${enrolledArray.length} courses (${totalCredits} credits).`,
         [
           {
             text: 'OK',
@@ -89,93 +284,123 @@ export default function CourseSelectionScreen() {
   };
 
   return (
-    <View style={styles.container}>
-
-      {/* Header */}
+    <SafeAreaView style={styles.container}>
+      {/* ── Header ────────────────────────────────────── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.logo}>
-            <Ionicons name="school-outline" size={20} color="#FFFFFF" />
-          </View>
-
+          <TouchableOpacity
+            style={styles.logo}
+            onPress={() => router.push({ pathname: '/dashboard', params: { studentId } })}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="school" size={19} color="#FFFFFF" />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>Course Selection</Text>
         </View>
 
         <View style={styles.headerRight}>
-          <View style={styles.notification}>
+          <TouchableOpacity
+            style={styles.notification}
+            onPress={() => router.push({ pathname: '/dashboard', params: { studentId } })}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Ionicons name="notifications-outline" size={22} color="#374151" />
             <View style={styles.notificationDot} />
-          </View>
+          </TouchableOpacity>
 
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>JD</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.avatar}
+            onPress={() =>
+              router.push({
+                pathname: '/profile',
+                params: { studentId, role: 'student' },
+              })
+            }
+            activeOpacity={0.8}
+          >
+            <Text style={styles.avatarText}>AP</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />
+        }
       >
-
-        {/* Search */}
+        {/* ── Search Box ──────────────────────────────── */}
         <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={21} color="#7B8190" />
-
+          <Ionicons name="search-outline" size={20} color="#7B8190" />
           <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder="Search module code, name or lecturer..."
             placeholderTextColor="#8B8F9B"
             style={styles.searchInput}
+            autoCorrect={false}
           />
-
           {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-outline" size={21} color="#7B8190" />
+            <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={18} color="#9CA3AF" />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Tabs */}
+        {/* ── Filter Tabs ─────────────────────────────── */}
         <View style={styles.tabs}>
-          <View style={[styles.tab, styles.activeTab]}>
-            <Text style={styles.activeTabText}>All (4)</Text>
-          </View>
+          <TouchableOpacity
+            style={[styles.tab, filterType === 'All' && styles.activeTab]}
+            onPress={() => setFilterType('All')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabText, filterType === 'All' && styles.activeTabText]}>
+              All ({totalCount})
+            </Text>
+          </TouchableOpacity>
 
-          <View style={styles.tab}>
-            <Text style={styles.tabText}>Core (2)</Text>
-          </View>
+          <TouchableOpacity
+            style={[styles.tab, filterType === 'Core' && styles.activeTab]}
+            onPress={() => setFilterType('Core')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabText, filterType === 'Core' && styles.activeTabText]}>
+              Core ({coreCount})
+            </Text>
+          </TouchableOpacity>
 
-          <View style={styles.tab}>
-            <Text style={styles.tabText}>Electives (2)</Text>
-          </View>
+          <TouchableOpacity
+            style={[styles.tab, filterType === 'Elective' && styles.activeTab]}
+            onPress={() => setFilterType('Elective')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabText, filterType === 'Elective' && styles.activeTabText]}>
+              Electives ({electiveCount})
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Academic Load */}
+        {/* ── Academic Load Card ──────────────────────── */}
         <View style={styles.loadCard}>
           <View style={styles.loadHeader}>
             <View style={styles.loadTitleRow}>
               <View style={styles.loadIcon}>
-                <Ionicons
-                  name="trending-up-outline"
-                  size={19}
-                  color="#4338CA"
-                />
+                <Ionicons name="trending-up" size={18} color="#4F46E5" />
               </View>
-
               <Text style={styles.loadTitle}>Academic Load</Text>
             </View>
 
-            <View style={styles.optimalBadge}>
-              <View style={styles.greenDot} />
-              <Text style={styles.optimalText}>Optimal Load</Text>
+            <View style={hasSlotBConflict ? styles.conflictBadge : styles.optimalBadge}>
+              <View style={hasSlotBConflict ? styles.redDot : styles.greenDot} />
+              <Text style={hasSlotBConflict ? styles.conflictBadgeText : styles.optimalText}>
+                {hasSlotBConflict ? 'Clash Detected' : 'Optimal Load'}
+              </Text>
             </View>
           </View>
 
           <View style={styles.creditRow}>
             <Text style={styles.creditLabel}>Enrolled Credit Ratio</Text>
-
             <View style={styles.creditValueRow}>
               <Text style={styles.creditValue}>{totalCredits}</Text>
               <Text style={styles.creditMax}> / 20 Credits</Text>
@@ -186,7 +411,10 @@ export default function CourseSelectionScreen() {
             <View
               style={[
                 styles.progressFill,
-                { width: `${Math.min((totalCredits / 20) * 100, 100)}%` },
+                {
+                  width: `${Math.min((totalCredits / 20) * 100, 100)}%`,
+                  backgroundColor: hasSlotBConflict ? '#EF4444' : '#4F46E5',
+                },
               ]}
             />
           </View>
@@ -198,796 +426,676 @@ export default function CourseSelectionScreen() {
           </View>
         </View>
 
-        {/* Course 1 */}
-        <View style={styles.courseCard}>
-          <View style={styles.courseTopRow}>
-            <View style={styles.courseMeta}>
-              <View style={styles.coreBadge}>
-                <Text style={styles.coreText}>CORE</Text>
-              </View>
-
-              <Text style={styles.courseCredits}>4.0 cr</Text>
-            </View>
-
-            <View style={styles.enrolledBadge}>
-              <Ionicons name="checkmark" size={14} color="#059669" />
-              <Text style={styles.enrolledText}>Enrolled</Text>
-            </View>
+        {/* ── Course List ─────────────────────────────── */}
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator color="#4F46E5" size="large" />
+            <Text style={styles.loadingText}>Loading catalogue…</Text>
           </View>
-
-          <Text style={styles.courseTitle}>
-            IT3060 Human Computer{'\n'}Interaction
-          </Text>
-
-          <Text style={styles.lecturer}>
-            Prof. Diana Jenkins • Dept of Informatics
-          </Text>
-
-          <View style={styles.divider} />
-
-          <View style={styles.scheduleRow}>
-            <Ionicons name="time-outline" size={17} color="#737986" />
-            <Text style={styles.scheduleText}>
-              Mon 09:00 - 12:00 (Auditorium East)
+        ) : filteredCourses.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Ionicons name="book-outline" size={42} color="#CBD5E1" />
+            <Text style={styles.emptyTitle}>No courses found</Text>
+            <Text style={styles.emptySub}>
+              Try adjusting your search query or switching filters.
             </Text>
           </View>
+        ) : (
+          filteredCourses.map((course) => {
+            const isEnrolled = enrolledCodes.has(course.courseCode);
+            const isCore = course.type === 'Core';
+            const hasSlots = course.slots && course.slots.length > 0;
+            const curSlot = selectedSlots[course.courseCode] || 'Slot A';
 
-          <View style={styles.scheduleRow}>
-            <Ionicons name="flask-outline" size={17} color="#737986" />
-            <Text style={styles.scheduleText}>
-              Wed 14:00 - 16:00 (Graphics Lab T-302)
-            </Text>
-          </View>
-        </View>
+            return (
+              <View key={course._id || course.courseCode} style={styles.courseCard}>
+                {/* Card Top Meta */}
+                <View style={styles.courseTopRow}>
+                  <View style={styles.courseMeta}>
+                    <View style={isCore ? styles.coreBadge : styles.electiveBadge}>
+                      <Text style={isCore ? styles.coreText : styles.electiveText}>
+                        {course.type.toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text style={styles.courseCredits}>{course.credits || 4}.0 cr</Text>
+                  </View>
 
-        {/* Course 2 */}
-        <View style={styles.courseCard}>
-          <View style={styles.courseTopRow}>
-            <View style={styles.courseMeta}>
-              <View style={styles.coreBadge}>
-                <Text style={styles.coreText}>CORE</Text>
-              </View>
+                  {/* Enrollment action button / status */}
+                  {isCore ? (
+                    <TouchableOpacity
+                      style={[styles.enrolledBadge, !isEnrolled && { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' }]}
+                      onPress={() => toggleEnrollment(course.courseCode)}
+                      activeOpacity={0.7}
+                    >
+                      {isEnrolled ? (
+                        <>
+                          <Ionicons name="checkmark" size={14} color="#059669" />
+                          <Text style={styles.enrolledText}>Enrolled</Text>
+                        </>
+                      ) : (
+                        <Text style={[styles.enrolledText, { color: '#64748B' }]}>+ Add Core</Text>
+                      )}
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[
+                        styles.addButton,
+                        isEnrolled && { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+                      ]}
+                      onPress={() => toggleEnrollment(course.courseCode)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.addButtonText, isEnrolled && { color: '#059669' }]}>
+                        {isEnrolled ? '✓ Added' : '+ Add'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
 
-              <Text style={styles.courseCredits}>4.0 cr</Text>
-            </View>
-
-            <View style={styles.enrolledBadge}>
-              <Ionicons name="checkmark" size={14} color="#059669" />
-              <Text style={styles.enrolledText}>Enrolled</Text>
-            </View>
-          </View>
-
-          <Text style={styles.courseTitle}>
-            IT3040 Distributed Systems &{'\n'}Cloud
-          </Text>
-
-          <Text style={styles.lecturer}>
-            Dr. Aaron Vance • Systems Engineering
-          </Text>
-
-          <View style={styles.divider} />
-
-          <View style={styles.scheduleRow}>
-            <Ionicons name="time-outline" size={17} color="#737986" />
-            <Text style={styles.scheduleText}>
-              Tue 10:00 - 13:00 (Turing Hall B-201)
-            </Text>
-          </View>
-        </View>
-
-        {/* Course 3 */}
-        <View style={styles.courseCard}>
-          <View style={styles.courseTopRow}>
-            <View style={styles.courseMeta}>
-              <View style={styles.electiveBadge}>
-                <Text style={styles.electiveText}>ELECTIVE</Text>
-              </View>
-
-              <Text style={styles.courseCredits}>4.0 cr</Text>
-            </View>
-
-            <View style={styles.chooseBadge}>
-              <Text style={styles.chooseText}>Choose Slot</Text>
-            </View>
-          </View>
-
-          <Text style={styles.courseTitle}>
-            IT3080 Machine Learning{'\n'}Applications
-          </Text>
-
-          <Text style={styles.lecturer}>
-            Assoc. Prof. Elena Wu • AI Lab
-          </Text>
-
-          {/* Slot A */}
-          <TouchableOpacity
-            style={selectedSlot === 'Slot A' ? styles.selectedSlot : styles.conflictSlot}
-            onPress={() => setSelectedSlot('Slot A')}
-            activeOpacity={0.8}
-          >
-            <View style={selectedSlot === 'Slot A' ? styles.radioOuter : styles.radioEmpty}>
-              {selectedSlot === 'Slot A' && <View style={styles.radioInner} />}
-            </View>
-
-            <View style={styles.slotContent}>
-              <Text style={styles.slotTitle}>Slot A: Thu 09:00 - 12:00</Text>
-              <Text style={styles.slotRoom}>Robotics Center R-12 (Optimal • No Clash)</Text>
-            </View>
-
-            {selectedSlot === 'Slot A' && (
-              <View style={styles.selectedBadge}>
-                <Text style={styles.selectedText}>Selected ✓</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {/* Slot B */}
-          <TouchableOpacity
-            style={[
-              selectedSlot === 'Slot B' ? styles.selectedSlot : styles.conflictSlot,
-              { borderColor: '#F87171' },
-            ]}
-            onPress={() => setSelectedSlot('Slot B')}
-            activeOpacity={0.8}
-          >
-            <View style={selectedSlot === 'Slot B' ? styles.radioOuter : styles.radioEmpty}>
-              {selectedSlot === 'Slot B' && <View style={styles.radioInner} />}
-            </View>
-
-            <View style={styles.slotContent}>
-              <Text style={styles.slotTitle}>Slot B: Wed 14:00 - 17:00</Text>
-
-              <View style={styles.warningRow}>
-                <Ionicons
-                  name="warning-outline"
-                  size={14}
-                  color="#DC2626"
-                />
-
-                <Text style={styles.conflictText}>
-                  Conflict with IT3060 HCI Lab (Wed 14:00-16:00)
+                {/* Course Title */}
+                <Text style={styles.courseTitle}>
+                  {course.courseCode} {course.courseName}
                 </Text>
+
+                {/* Lecturer info */}
+                {course.lecturer ? (
+                  <Text style={styles.lecturer}>{course.lecturer}</Text>
+                ) : null}
+
+                {/* Slot Selection (if any) */}
+                {hasSlots ? (
+                  <View style={styles.slotsWrapper}>
+                    {course.slots!.map((slot) => {
+                      const isSelected = curSlot === slot.slotName;
+                      const isClash = slot.slotName === 'Slot B' && course.courseCode === 'IT3080';
+
+                      return (
+                        <TouchableOpacity
+                          key={slot.slotName}
+                          style={[
+                            styles.slotOption,
+                            isSelected && styles.selectedSlot,
+                            isClash && isSelected && styles.conflictSlotBorder,
+                          ]}
+                          onPress={() => setSlot(course.courseCode, slot.slotName)}
+                          activeOpacity={0.8}
+                        >
+                          <View style={isSelected ? styles.radioOuterActive : styles.radioOuter}>
+                            {isSelected && <View style={styles.radioInner} />}
+                          </View>
+
+                          <View style={styles.slotContent}>
+                            <Text style={styles.slotTitle}>
+                              {slot.slotName}: {slot.day} {slot.startTime} - {slot.endTime}
+                            </Text>
+                            <Text style={styles.slotRoom}>
+                              {slot.room} {isClash ? '• Clash with IT3060 Lab' : '• Optimal'}
+                            </Text>
+                          </View>
+
+                          {isSelected && !isClash && (
+                            <View style={styles.selectedBadge}>
+                              <Text style={styles.selectedText}>Selected ✓</Text>
+                            </View>
+                          )}
+
+                          {isClash && (
+                            <Ionicons name="warning-outline" size={18} color="#DC2626" />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  // Schedule details
+                  course.schedule && course.schedule.length > 0 && (
+                    <View style={styles.scheduleContainer}>
+                      <View style={styles.divider} />
+                      {course.schedule.map((sch, sIdx) => (
+                        <View key={sIdx} style={styles.scheduleRow}>
+                          <Ionicons
+                            name={sch.type === 'Lab' ? 'flask-outline' : 'time-outline'}
+                            size={16}
+                            color="#737986"
+                          />
+                          <Text style={styles.scheduleText}>
+                            {sch.day} {sch.startTime} - {sch.endTime} ({sch.room || 'Main Hall'})
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )
+                )}
               </View>
-            </View>
-
-            <Ionicons name="warning-outline" size={20} color="#DC2626" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Course 4 */}
-        <View style={styles.courseCard}>
-          <View style={styles.courseTopRow}>
-            <View style={styles.courseMeta}>
-              <View style={styles.electiveBadge}>
-                <Text style={styles.electiveText}>ELECTIVE</Text>
-              </View>
-
-              <Text style={styles.courseCredits}>4.0 cr</Text>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.addButton, enrolledCourse4 && { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
-              onPress={() => setEnrolledCourse4(!enrolledCourse4)}
-            >
-              <Text style={[styles.addButtonText, enrolledCourse4 && { color: '#059669' }]}>
-                {enrolledCourse4 ? '✓ Added' : '+ Add'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.courseTitle}>
-            IT3090 Mobile Application{'\n'}Development
-          </Text>
-
-          <Text style={styles.lecturer}>
-            Lecturer Marcus Lin • Fri 14:00 - 17:00
-          </Text>
-        </View>
-
+            );
+          })
+        )}
       </ScrollView>
 
-      {/* Bottom Register Button */}
+      {/* ── Bottom Confirm Bar ────────────────────────── */}
       <View style={styles.bottomContainer}>
         <TouchableOpacity
           style={[styles.reviewButton, saving && { opacity: 0.7 }]}
           onPress={handleSaveRegistration}
           disabled={saving}
+          activeOpacity={0.88}
         >
           {saving ? (
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
             <>
-              <Ionicons
-                name="checkmark-circle-outline"
-                size={21}
-                color="#FFFFFF"
-              />
-
+              <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
               <Text style={styles.reviewButtonText}>
                 Confirm & Sync ({totalCredits} Credits)
               </Text>
-
-              <Ionicons
-                name="arrow-forward"
-                size={21}
-                color="#FFFFFF"
-              />
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
             </>
           )}
         </TouchableOpacity>
       </View>
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() =>
-            router.push({
-              pathname: '/dashboard',
-              params: { studentId },
-            })
-          }
-        >
-          <Ionicons name="grid-outline" size={22} color="#5B5F6B" />
-          <Text style={styles.navText}>Dashboard</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="book-outline" size={22} color="#4338CA" />
-          <Text style={styles.navActiveText}>Courses</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="calendar-outline" size={22} color="#5B5F6B" />
-          <Text style={styles.navText}>Timetable</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navItem}>
-          <View>
-            <Ionicons name="warning-outline" size={22} color="#5B5F6B" />
-            <View style={styles.navNotificationDot} />
-          </View>
-
-          <Text style={styles.navText}>Alerts</Text>
-        </TouchableOpacity>
-      </View>
-
-    </View>
+      {/* ── Footer Navigation ─────────────────────────── */}
+      <FooterTab active="courses" studentId={studentId} role="student" />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7F8FC',
+    backgroundColor: '#F8FAFC',
   },
 
+  // ── Header ─────────────────────────────────────────
   header: {
-    height: 72,
+    height: 60,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E7E9F0',
+    borderBottomColor: '#F1F5F9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 23,
+    paddingHorizontal: 20,
   },
-
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
   },
-
   logo: {
     width: 34,
     height: 34,
-    borderRadius: 9,
-    backgroundColor: '#4338CA',
+    borderRadius: 10,
+    backgroundColor: '#4F46E5',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 9,
   },
-
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#172033',
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
   },
-
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-
   notification: {
     position: 'relative',
+    padding: 4,
   },
-
   notificationDot: {
     position: 'absolute',
-    right: 0,
-    top: 1,
+    top: 3,
+    right: 4,
     width: 7,
     height: 7,
-    borderRadius: 4,
-    backgroundColor: '#DC2626',
+    borderRadius: 3.5,
+    backgroundColor: '#EF4444',
   },
-
   avatar: {
-    width: 35,
-    height: 35,
+    width: 36,
+    height: 36,
     borderRadius: 18,
-    backgroundColor: '#E4E2FF',
+    backgroundColor: '#EEF2FF',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-
-  avatarText: {
-    color: '#4338CA',
-    fontWeight: '700',
-  },
-
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 175,
-  },
-
-  searchBox: {
-    height: 45,
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#DDDFE8',
-    borderRadius: 23,
+    borderColor: '#E0E7FF',
+  },
+  avatarText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#4F46E5',
+  },
+
+  // ── Scroll Content ─────────────────────────────────
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+
+  // ── Search Box ─────────────────────────────────────
+  searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     paddingHorizontal: 14,
-    marginBottom: 11,
+    height: 48,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+    gap: 10,
   },
-
   searchInput: {
     flex: 1,
-    fontSize: 13,
-    marginLeft: 8,
-    color: '#1F2937',
+    fontSize: 14,
+    color: '#0F172A',
   },
 
+  // ── Filter Tabs ────────────────────────────────────
   tabs: {
-    height: 32,
-    backgroundColor: '#E3ECFF',
-    borderRadius: 9,
     flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
     padding: 3,
     marginBottom: 16,
   },
-
   tab: {
     flex: 1,
-    justifyContent: 'center',
+    paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 7,
+    borderRadius: 9,
   },
-
   activeTab: {
-    backgroundColor: '#4338CA',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
-
-  activeTabText: {
-    color: '#FFFFFF',
+  tabText: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#64748B',
+  },
+  activeTabText: {
+    color: '#4F46E5',
+    fontWeight: '800',
   },
 
-  tabText: {
-    color: '#4B5563',
-    fontSize: 12,
-  },
-
+  // ── Academic Load Card ─────────────────────────────
   loadCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 15,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E4EB',
-    marginBottom: 12,
+    borderColor: '#F1F5F9',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
-
   loadHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
   },
-
   loadTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-
   loadIcon: {
     width: 28,
     height: 28,
-    borderRadius: 7,
-    backgroundColor: '#EEECFF',
+    borderRadius: 8,
+    backgroundColor: '#EEF2FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 9,
   },
-
   loadTitle: {
-    fontSize: 17,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#172033',
+    color: '#0F172A',
   },
-
   optimalBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    borderRadius: 12,
-    paddingHorizontal: 9,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
     paddingVertical: 4,
+    borderRadius: 12,
+    gap: 5,
   },
-
+  conflictBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 5,
+  },
   greenDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: '#10B981',
-    marginRight: 5,
   },
-
+  redDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#EF4444',
+  },
   optimalText: {
-    fontSize: 10,
+    fontSize: 11,
+    fontWeight: '700',
     color: '#059669',
-    fontWeight: '600',
   },
-
+  conflictBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
   creditRow: {
-    marginTop: 17,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
-
   creditLabel: {
     fontSize: 12,
-    color: '#4B5563',
+    color: '#64748B',
+    fontWeight: '500',
   },
-
   creditValueRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
   },
-
   creditValue: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#4338CA',
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
   },
-
   creditMax: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#94A3B8',
+    fontWeight: '500',
   },
-
   progressBackground: {
     height: 8,
-    borderRadius: 5,
-    backgroundColor: '#DFE8F8',
-    marginTop: 8,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 4,
     overflow: 'hidden',
+    marginBottom: 8,
   },
-
   progressFill: {
-    width: '80%',
     height: '100%',
-    backgroundColor: '#4338CA',
-    borderRadius: 5,
+    borderRadius: 4,
   },
-
   loadScale: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 8,
   },
-
   scaleText: {
     fontSize: 10,
-    color: '#737986',
+    color: '#94A3B8',
   },
-
   targetText: {
     fontSize: 10,
-    color: '#172033',
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#4F46E5',
   },
 
+  // ── Course Card ────────────────────────────────────
   courseCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 15,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#E2E4EB',
-    padding: 15,
-    marginBottom: 12,
+    borderColor: '#F1F5F9',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
-
   courseTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
-
   courseMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-
   coreBadge: {
-    backgroundColor: '#EAE8FF',
+    backgroundColor: '#EEF2FF',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 5,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-
   coreText: {
-    color: '#4338CA',
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#4F46E5',
   },
-
   electiveBadge: {
-    backgroundColor: '#B9F5DD',
+    backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 5,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-
   electiveText: {
-    color: '#047857',
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
   },
-
   courseCredits: {
-    marginLeft: 9,
-    color: '#737986',
-    fontSize: 13,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
   },
-
   enrolledBadge: {
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    backgroundColor: '#F0FDF4',
-    borderRadius: 12,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
     flexDirection: 'row',
     alignItems: 'center',
-  },
-
-  enrolledText: {
-    color: '#059669',
-    fontSize: 10,
-    fontWeight: '600',
-    marginLeft: 3,
-  },
-
-  chooseBadge: {
-    borderWidth: 1,
-    borderColor: '#FCD34D',
-    backgroundColor: '#FFFBEB',
-    borderRadius: 12,
-    paddingHorizontal: 9,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
     paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    gap: 4,
   },
-
-  chooseText: {
-    color: '#D97706',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-
-  courseTitle: {
-    color: '#172033',
-    fontSize: 16,
-    lineHeight: 21,
+  enrolledText: {
+    fontSize: 11,
     fontWeight: '700',
-    marginTop: 8,
+    color: '#059669',
   },
-
+  addButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+  },
+  addButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  courseTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
   lecturer: {
-    color: '#5F6470',
     fontSize: 12,
-    marginTop: 6,
+    color: '#64748B',
+    marginBottom: 8,
   },
-
   divider: {
     height: 1,
-    backgroundColor: '#E9EBF0',
+    backgroundColor: '#F1F5F9',
     marginVertical: 10,
   },
-
+  scheduleContainer: {
+    marginTop: 2,
+  },
   scheduleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 5,
+    gap: 8,
+    marginBottom: 6,
   },
-
   scheduleText: {
-    color: '#5F6470',
-    fontSize: 11,
-    marginLeft: 7,
+    fontSize: 12,
+    color: '#64748B',
+    flex: 1,
   },
 
+  // ── Slot Options ───────────────────────────────────
+  slotsWrapper: {
+    marginTop: 10,
+    gap: 8,
+  },
+  slotOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    gap: 10,
+  },
   selectedSlot: {
-    borderWidth: 2,
-    borderColor: '#4338CA',
-    borderRadius: 9,
-    padding: 9,
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    borderColor: '#818CF8',
   },
-
-  conflictSlot: {
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    backgroundColor: '#FFF7F7',
-    borderRadius: 9,
-    padding: 9,
-    marginTop: 7,
-    flexDirection: 'row',
-    alignItems: 'center',
+  conflictSlotBorder: {
+    borderColor: '#F87171',
   },
-
   radioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#4338CA',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: '#94A3B8',
     justifyContent: 'center',
     alignItems: 'center',
   },
-
+  radioOuterActive: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: '#4F46E5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#4338CA',
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#4F46E5',
   },
-
-  radioEmpty: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#C7CBD5',
-  },
-
   slotContent: {
     flex: 1,
-    marginLeft: 8,
   },
-
   slotTitle: {
-    color: '#172033',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-
-  slotRoom: {
-    color: '#5F6470',
-    fontSize: 10,
-    marginTop: 3,
-  },
-
-  warningRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 3,
-  },
-
-  conflictText: {
-    color: '#DC2626',
-    fontSize: 10,
-    marginLeft: 3,
-  },
-
-  selectedBadge: {
-    borderWidth: 1,
-    borderColor: '#C4C0FF',
-    borderRadius: 10,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-
-  selectedText: {
-    color: '#4338CA',
-    fontSize: 9,
-    fontWeight: '600',
-  },
-
-  addButton: {
-    borderWidth: 2,
-    borderColor: '#4338CA',
-    borderRadius: 9,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-
-  addButtonText: {
-    color: '#4338CA',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-
-  bottomContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 62,
-    backgroundColor: '#F7F8FC',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-  },
-
-  reviewButton: {
-    height: 44,
-    backgroundColor: '#4F46E5',
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 9,
-  },
-
-  reviewButtonText: {
-    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  slotRoom: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  selectedBadge: {
+    backgroundColor: '#E0E7FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  selectedText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#4338CA',
   },
 
-  bottomNav: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 62,
+  // ── States ─────────────────────────────────────────
+  loadingWrap: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  emptyWrap: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  emptySub: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+    maxWidth: 240,
+  },
+
+  // ── Bottom Sync Button ─────────────────────────────
+  bottomContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    borderTopColor: '#F1F5F9',
   },
-
-  navItem: {
+  reviewButton: {
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#4F46E5',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#4F46E5',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
-
-  navText: {
-    fontSize: 9,
-    color: '#5B5F6B',
-    marginTop: 3,
-  },
-
-  navActiveText: {
-    fontSize: 9,
-    color: '#4338CA',
-    fontWeight: '600',
-    marginTop: 3,
-  },
-
-  navNotificationDot: {
-    position: 'absolute',
-    right: -1,
-    top: -1,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#DC2626',
+  reviewButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
