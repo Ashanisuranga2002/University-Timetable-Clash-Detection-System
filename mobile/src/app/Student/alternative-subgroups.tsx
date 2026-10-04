@@ -60,17 +60,15 @@ export default function AlternativeGroupsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header[cite: 49] */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Alternative Subgroups</Text>
-        <View style={{ width: 24 }} /> {/* Spacer to center title */}
+        <View style={{ width: 24 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Current Course Card[cite: 49] */}
         <View style={styles.currentCourseContainer}>
           <Text style={styles.badge}>CURRENT COURSE</Text>
           <Text style={styles.courseTitle}>IT3050 – Cloud Computing Systems</Text>
@@ -86,7 +84,6 @@ export default function AlternativeGroupsScreen() {
           </View>
         </View>
 
-        {/* Filter Section[cite: 49] */}
         <View style={styles.filterHeader}>
           <Text style={styles.sectionTitle}>Available Alternatives</Text>
           <Text style={styles.availableCount}>{MOCK_ALTERNATIVES.length} Available</Text>
@@ -105,7 +102,6 @@ export default function AlternativeGroupsScreen() {
           />
         </View>
 
-        {/* Group Options List[cite: 49, 50] */}
         {displayedGroups.map((group) => {
           const isSelected = selectedGroupId === group.id;
           return (
@@ -158,8 +154,7 @@ export default function AlternativeGroupsScreen() {
         })}
       </ScrollView>
 
-      {/* Continue Button (Sticky at bottom)[cite: 50] */}
-      {selectedGroupId && (
+      {!!selectedGroupId && (
         <View style={styles.footer}>
           <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
             <Text style={styles.continueButtonText}>
@@ -180,7 +175,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '600', color: '#101828' },
   scrollContent: { padding: 16, paddingBottom: 100 },
   
-  // Current Course Styles[cite: 49]
+  // Current Course Styles
   currentCourseContainer: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 12, marginBottom: 24, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4 },
   badge: { backgroundColor: '#EEF2F6', color: '#4A3AFF', fontSize: 12, fontWeight: '600', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 16, marginBottom: 12 },
   courseTitle: { fontSize: 18, fontWeight: 'bold', color: '#101828', marginBottom: 4 },
@@ -191,7 +186,7 @@ const styles = StyleSheet.create({
   conflictSubtitle: { fontSize: 12, color: '#D92D20', marginTop: 2 },
   clashBadge: { backgroundColor: '#FEE4E2', color: '#B42318', fontSize: 12, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
 
-  // Filter Styles[cite: 49]
+  // Filter Styles
   filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#101828' },
   availableCount: { fontSize: 14, color: '#4A3AFF', fontWeight: '600' },
@@ -199,7 +194,7 @@ const styles = StyleSheet.create({
   toggleLabelContainer: { flexDirection: 'row', alignItems: 'center' },
   toggleLabel: { fontSize: 14, color: '#344054', marginLeft: 8, fontWeight: '500' },
 
-  // Group Card Styles[cite: 49, 50]
+  // Group Card Styles
   groupCard: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#EAECF0' },
   groupCardSelected: { borderColor: '#4A3AFF', borderWidth: 2, backgroundColor: '#F4F3FF' },
   groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
@@ -220,7 +215,7 @@ const styles = StyleSheet.create({
   conflictStatusText: { fontSize: 14, fontWeight: '500', marginLeft: 4 },
   seatsText: { fontSize: 13, color: '#98A2B3' },
 
-  // Footer Button[cite: 50]
+  // Footer Button
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', padding: 16, borderTopWidth: 1, borderColor: '#EAECF0' },
   continueButton: { backgroundColor: '#4A3AFF', flexDirection: 'row', paddingVertical: 16, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   continueButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', marginRight: 8 },
