@@ -21,6 +21,7 @@ export default function RootLayout() {
         <Stack.Screen name="dashboard" options={{ headerShown: false }} />
         <Stack.Screen name="course-selection" options={{ headerShown: false }} />
         <Stack.Screen name="profile" options={{ headerShown: false }} />
+        <Stack.Screen name="Advisor/dashboard" options={{ headerShown: false }} />
 
         {/* Admin screen (reached from unified login) */}
         <Stack.Screen name="admin-dashboard" options={{ headerShown: false }} />

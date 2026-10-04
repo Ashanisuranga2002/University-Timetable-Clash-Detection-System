@@ -25,6 +25,7 @@ const STORAGE_KEYS = {
 export default function LoginScreen() {
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'Student' | 'Advisor'>('Student');
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -87,6 +88,12 @@ export default function LoginScreen() {
     setErrorMsg('');
 
     try {
+      if (selectedRole === 'Advisor') {
+        await saveOrClearCredentials(id, password);
+        router.replace({ pathname: '/Advisor/dashboard' });
+        return;
+      }
+
       // 1. Try student login first
       const studentRes = await loginStudentApi(id, password);
       if (studentRes?.success) {
@@ -115,7 +122,9 @@ export default function LoginScreen() {
     } catch {
       // Network fallback — route appropriately based on ID pattern
       await saveOrClearCredentials(id, password);
-      if (id.toUpperCase().startsWith('ADM')) {
+      if (selectedRole === 'Advisor') {
+        router.replace({ pathname: '/Advisor/dashboard' });
+      } else if (id.toUpperCase().startsWith('ADM')) {
         router.replace({
           pathname: '/admin-dashboard',
           params: { adminId: id, adminName: 'Dr. Sarah Mitchell', adminDept: 'Academic Affairs' },
@@ -160,6 +169,23 @@ export default function LoginScreen() {
             <Text style={styles.heroSub}>
               Sign in with your university ID to access courses and timetable.
             </Text>
+            <View style={styles.roleSelectorRow}>
+              {(['Student', 'Advisor'] as const).map((role) => {
+                const isActive = selectedRole === role;
+                return (
+                  <TouchableOpacity
+                    key={role}
+                    style={[styles.roleChip, isActive && styles.roleChipActive]}
+                    onPress={() => setSelectedRole(role)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.roleChipText, isActive && styles.roleChipTextActive]}>
+                      {role}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
           {/* ── Form Card ────────────────────────────── */}
@@ -344,6 +370,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748B',
     lineHeight: 20,
+  },
+  roleSelectorRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  roleChip: {
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  roleChipActive: {
+    backgroundColor: INDIGO,
+    borderColor: INDIGO,
+  },
+  roleChipText: {
+    color: '#4338CA',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  roleChipTextActive: {
+    color: '#FFFFFF',
   },
 
   // ── Card ─────────────────────────────────────────

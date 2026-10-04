@@ -253,12 +253,21 @@ export default function CourseSelectionScreen() {
           `You have successfully registered for ${enrolledArray.length} courses (${totalCredits} Credits) with 0 timetable clashes.`,
           [
             {
+              text: 'Find Alternatives',
+              onPress: () =>
+                router.push({
+                  pathname: '/Student/alternative-subgroups',
+                  params: { studentId },
+                }),
+            },
+            {
               text: 'Go to Dashboard',
               onPress: () =>
                 router.push({
                   pathname: '/dashboard',
                   params: { studentId },
                 }),
+              style: 'cancel',
             },
           ]
         );

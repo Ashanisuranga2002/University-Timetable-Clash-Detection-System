@@ -10,6 +10,8 @@ const courseRoutes = require("./routes/course.routes");
 const registrationRoutes = require("./routes/registration.routes");
 const adminAuthRoutes = require("./routes/admin.auth.routes");
 const adminRoutes = require("./routes/admin.routes");
+const studentRequestRoutes = require("./routes/studentRequestRoutes");
+const advisorReviewRoutes = require("./routes/advisorReviewRoutes");
 
 const app = express();
 
@@ -25,6 +27,9 @@ app.use("/api/courses", courseRoutes);
 app.use("/api/registration", registrationRoutes);
 app.use("/api/admin/auth", adminAuthRoutes);
 app.use("/api/admin", adminRoutes);
+
+app.use('/api/student-requests', studentRequestRoutes);
+app.use('/api/advisor-reviews', advisorReviewRoutes);
 
 app.get("/", (req, res) => {
   res.json({
