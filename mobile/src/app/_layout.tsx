@@ -29,7 +29,7 @@ export default function RootLayout() {
         />
 
         <Stack.Screen
-          name="courses"
+          name="course-selection"
           options={{
             headerShown: false,
           }}

@@ -23,6 +23,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('password123');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [selectedRole, setSelectedRole] = useState('Student');
 
   const handleLogin = async () => {
     if (!studentId.trim() || !password) {
@@ -36,20 +37,32 @@ export default function LoginScreen() {
       const res = await loginStudentApi(studentId.trim(), password);
 
       if (res?.success) {
-        router.push({
-          pathname: '/dashboard',
-          params: { studentId: studentId.trim() },
-        });
+        if (selectedRole === 'Advisor') {
+          router.push({
+            pathname: '/Advisor/dashboard',
+          });
+        } else {
+          router.push({
+            pathname: '/dashboard',
+            params: { studentId: studentId.trim() },
+          });
+        }
       } else {
         setErrorMsg(res?.message || 'Invalid credentials');
       }
     } catch (err: any) {
       // If network fails, allow seamless fallback so user can still preview
       console.warn('Login request error, proceeding with offline preview:', err.message);
-      router.push({
-        pathname: '/dashboard',
-        params: { studentId: studentId.trim() },
-      });
+      if (selectedRole === 'Advisor') {
+        router.push({
+          pathname: '/Advisor/dashboard',
+        });
+      } else {
+        router.push({
+          pathname: '/dashboard',
+          params: { studentId: studentId.trim() },
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -157,26 +170,29 @@ export default function LoginScreen() {
                 isTight && styles.profileRowTight,
               ]}
             >
-              {['Student', 'Advisor', 'Monitor', 'Coordinator'].map((item, index) => (
-                <View
+              {['Student', 'Advisor', 'Monitor', 'Coordinator'].map((item) => {
+                const isActive = item === selectedRole;
+                return (
+                <Pressable
                   key={item}
+                  onPress={() => setSelectedRole(item)}
                   style={[
                     styles.profileChip,
-                    index === 0 && styles.profileChipActive,
+                    isActive && styles.profileChipActive,
                     isTight && styles.profileChipTight,
                   ]}
                 >
                   <Text
                     style={[
                       styles.profileChipText,
-                      index === 0 && styles.profileChipTextActive,
+                      isActive && styles.profileChipTextActive,
                       isTight && styles.profileChipTextTight,
                     ]}
                   >
                     {item}
                   </Text>
-                </View>
-              ))}
+                </Pressable>
+              )})}
             </View>
 
             {errorMsg ? (
@@ -253,7 +269,7 @@ export default function LoginScreen() {
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <>
-                  <Text style={styles.primaryButtonText}>Sign In as Student</Text>
+                  <Text style={styles.primaryButtonText}>Sign In as {selectedRole}</Text>
                   <Text style={styles.primaryArrowGlyph}>→</Text>
                 </>
               )}

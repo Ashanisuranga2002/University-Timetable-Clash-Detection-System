@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 // Use your machine IP for physical devices & Expo Go; localhost for web / iOS simulator
-const LOCAL_IP = '192.168.8.199';
+const LOCAL_IP = '10.243.34.145';
 const PORT = '5001';
 
 export const API_BASE_URL =

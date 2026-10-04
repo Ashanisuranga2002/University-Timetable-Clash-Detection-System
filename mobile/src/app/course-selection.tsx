@@ -43,12 +43,21 @@ export default function CourseSelectionScreen() {
           'Slot B overlaps with IT3060 HCI Lab on Wednesday (14:00 - 16:00). Your registration status has been set to BLOCKED until resolved.',
           [
             {
+              text: 'Find Alternatives',
+              onPress: () =>
+                router.push({
+                  pathname: '/Student/alternative-subgroups',
+                  params: { studentId },
+                }),
+            },
+            {
               text: 'Go to Dashboard',
               onPress: () =>
                 router.push({
                   pathname: '/dashboard',
                   params: { studentId },
                 }),
+              style: 'cancel',
             },
           ]
         );
