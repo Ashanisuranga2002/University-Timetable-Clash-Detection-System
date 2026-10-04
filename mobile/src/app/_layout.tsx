@@ -14,26 +14,17 @@ export default function RootLayout() {
       <AnimatedSplashOverlay />
 
       <Stack>
-        <Stack.Screen
-          name="index"
-          options={{
-            headerShown: false,
-          }}
-        />
+        {/* Unified login — handles students & admins */}
+        <Stack.Screen name="index" options={{ headerShown: false }} />
 
-        <Stack.Screen
-          name="dashboard"
-          options={{
-            headerShown: false,
-          }}
-        />
+        {/* Student screens */}
+        <Stack.Screen name="dashboard" options={{ headerShown: false }} />
+        <Stack.Screen name="course-selection" options={{ headerShown: false }} />
+        <Stack.Screen name="profile" options={{ headerShown: false }} />
+        <Stack.Screen name="Advisor/dashboard" options={{ headerShown: false }} />
 
-        <Stack.Screen
-          name="course-selection"
-          options={{
-            headerShown: false,
-          }}
-        />
+        {/* Admin screen (reached from unified login) */}
+        <Stack.Screen name="admin-dashboard" options={{ headerShown: false }} />
       </Stack>
     </ThemeProvider>
   );

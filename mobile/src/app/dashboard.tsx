@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { fetchDashboardApi } from '../services/api';
+import { FooterTab } from '../components/FooterTab';
 
 export default function DashboardScreen() {
   const { width, height } = useWindowDimensions();
@@ -91,7 +93,7 @@ export default function DashboardScreen() {
         ];
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
@@ -104,7 +106,16 @@ export default function DashboardScreen() {
       >
         <View style={[styles.topBar, isCompact && styles.topBarCompact]}>
           <View style={styles.profileRow}>
-            <View style={[styles.avatar, isCompact && styles.avatarCompact]}>
+            <TouchableOpacity
+              style={[styles.avatar, isCompact && styles.avatarCompact]}
+              onPress={() =>
+                router.push({
+                  pathname: '/profile',
+                  params: { studentId, role: 'student' },
+                })
+              }
+              activeOpacity={0.8}
+            >
               <Text
                 style={[
                   styles.avatarText,
@@ -113,7 +124,7 @@ export default function DashboardScreen() {
               >
                 {student.initials || 'ST'}
               </Text>
-            </View>
+            </TouchableOpacity>
 
             <View>
               <View
@@ -508,7 +519,8 @@ export default function DashboardScreen() {
           </View>
         </View>
       </ScrollView>
-    </View>
+      <FooterTab active="dashboard" studentId={studentId} />
+    </SafeAreaView>
   );
 }
 

@@ -9,90 +9,108 @@ export const API_BASE_URL =
     ? `http://localhost:${PORT}/api`
     : `http://${LOCAL_IP}:${PORT}/api`;
 
-export async function loginStudentApi(studentId: string, password: string) {
+const fallback = (path: string) =>
+  Platform.OS === 'web' ? null : `http://localhost:${PORT}/api${path}`;
+
+async function apiFetch(path: string, options?: RequestInit) {
   try {
-    const res = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ studentId, password }),
-    });
+    const res = await fetch(`${API_BASE_URL}${path}`, options);
     return await res.json();
-  } catch (error: any) {
-    // Fallback attempt to localhost if network IP fails
+  } catch (e: any) {
+    const fb = fallback(path);
+    if (!fb) throw e;
     try {
-      const fallbackRes = await fetch(`http://localhost:${PORT}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, password }),
-      });
-      return await fallbackRes.json();
+      const res = await fetch(fb, options);
+      return await res.json();
     } catch {
-      throw new Error(error?.message || 'Unable to connect to server');
+      throw new Error(e?.message || 'Network error');
     }
   }
 }
 
-export async function fetchDashboardApi(studentId: string) {
-  try {
-    const res = await fetch(`${API_BASE_URL}/dashboard/${studentId}`);
-    return await res.json();
-  } catch (error: any) {
-    try {
-      const fallbackRes = await fetch(`http://localhost:${PORT}/api/dashboard/${studentId}`);
-      return await fallbackRes.json();
-    } catch {
-      throw new Error(error?.message || 'Unable to load dashboard');
-    }
-  }
+export function loginStudentApi(studentId: string, password: string) {
+  return apiFetch('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId, password }),
+  });
 }
 
-export async function fetchCoursesApi(semester?: number) {
-  try {
-    const url = semester
-      ? `${API_BASE_URL}/courses?semester=${semester}`
-      : `${API_BASE_URL}/courses`;
-    const res = await fetch(url);
-    return await res.json();
-  } catch (error: any) {
-    try {
-      const fallbackRes = await fetch(`http://localhost:${PORT}/api/courses`);
-      return await fallbackRes.json();
-    } catch {
-      throw new Error(error?.message || 'Unable to load courses');
-    }
-  }
+export function fetchDashboardApi(studentId: string) {
+  return apiFetch(`/dashboard/${studentId}`);
 }
 
-export async function submitRegistrationApi(
+export function fetchCoursesApi(semester?: number) {
+  const q = semester ? `?semester=${semester}` : '';
+  return apiFetch(`/courses${q}`);
+}
+
+export function submitRegistrationApi(
   studentId: string,
   courseIds: string[],
   selectedSlots?: Record<string, string>
 ) {
-  try {
-    const res = await fetch(`${API_BASE_URL}/registration/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        studentId,
-        courseIds,
-        selectedSlots: selectedSlots || {},
-      }),
-    });
-    return await res.json();
-  } catch (error: any) {
-    try {
-      const fallbackRes = await fetch(`http://localhost:${PORT}/api/registration/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId,
-          courseIds,
-          selectedSlots: selectedSlots || {},
-        }),
-      });
-      return await fallbackRes.json();
-    } catch {
-      throw new Error(error?.message || 'Unable to submit registration');
-    }
+  return apiFetch('/registration/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId, courseIds, selectedSlots: selectedSlots || {} }),
+  });
+}
+
+// ─── Admin APIs ────────────────────────────────────────────────────────────────
+
+export function loginAdminApi(adminId: string, password: string) {
+  return apiFetch('/admin/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ adminId, password }),
+  });
+}
+
+export function fetchAdminDashboardApi() {
+  return apiFetch('/admin/dashboard');
+}
+
+export function fetchAdminCoursesApi() {
+  return apiFetch('/admin/courses');
+}
+
+export function createCourseApi(course: {
+  courseCode: string;
+  courseName: string;
+  credits: number;
+  semester: number;
+  type: string;
+  lecturer?: string;
+  description?: string;
+  schedule?: Array<{ day: string; startTime: string; endTime: string; room: string; type: string }>;
+}) {
+  return apiFetch('/admin/courses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(course),
+  });
+}
+
+export function deleteCourseApi(id: string) {
+  return apiFetch(`/admin/courses/${id}`, { method: 'DELETE' });
+}
+
+export function updateCourseApi(
+  id: string,
+  updates: {
+    courseCode?: string;
+    courseName?: string;
+    credits?: number;
+    semester?: number;
+    type?: string;
+    lecturer?: string;
+    description?: string;
   }
+) {
+  return apiFetch(`/admin/courses/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
 }

@@ -1,67 +1,136 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  useWindowDimensions,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { router } from 'expo-router';
-import { loginStudentApi } from '../services/api';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { loginStudentApi, loginAdminApi } from '../services/api';
+
+const STORAGE_KEYS = {
+  USER_ID: 'saved_user_id',
+  PASSWORD: 'saved_password',
+  REMEMBER_ME: 'saved_remember_me',
+};
 
 export default function LoginScreen() {
-  const { width, height } = useWindowDimensions();
-  const isCompact = width < 430 || height < 860;
-  const isTight = height < 860;
-
-  const [studentId, setStudentId] = useState('IT21047138');
-  const [password, setPassword] = useState('password123');
+  const [userId, setUserId] = useState('');
+  const [password, setPassword] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'Student' | 'Advisor'>('Student');
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [selectedRole, setSelectedRole] = useState('Student');
+
+  // ── Load Saved Credentials on Mount ────────────────────────
+  useEffect(() => {
+    async function loadSavedCredentials() {
+      try {
+        const [savedId, savedPass, savedRemember] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEYS.USER_ID),
+          AsyncStorage.getItem(STORAGE_KEYS.PASSWORD),
+          AsyncStorage.getItem(STORAGE_KEYS.REMEMBER_ME),
+        ]);
+
+        if (savedRemember === 'true') {
+          setRememberMe(true);
+          if (savedId) setUserId(savedId);
+          if (savedPass) setPassword(savedPass);
+        } else if (savedRemember === 'false') {
+          setRememberMe(false);
+        }
+      } catch (err) {
+        console.warn('Failed to load saved credentials:', err);
+      }
+    }
+
+    loadSavedCredentials();
+  }, []);
+
+  // ── Persist / Clear Credentials ───────────────────────────
+  const saveOrClearCredentials = async (id: string, pass: string) => {
+    try {
+      if (rememberMe) {
+        await Promise.all([
+          AsyncStorage.setItem(STORAGE_KEYS.USER_ID, id),
+          AsyncStorage.setItem(STORAGE_KEYS.PASSWORD, pass),
+          AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, 'true'),
+        ]);
+      } else {
+        await Promise.all([
+          AsyncStorage.removeItem(STORAGE_KEYS.USER_ID),
+          AsyncStorage.removeItem(STORAGE_KEYS.PASSWORD),
+          AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, 'false'),
+        ]);
+      }
+    } catch (err) {
+      console.warn('Failed to save credentials:', err);
+    }
+  };
 
   const handleLogin = async () => {
-    if (!studentId.trim() || !password) {
-      setErrorMsg('Please enter your Student ID and Password');
+    const id = userId.trim();
+    if (!id || !password) {
+      setErrorMsg('Please enter your ID and Password');
       return;
     }
 
-    try {
-      setLoading(true);
-      setErrorMsg('');
-      const res = await loginStudentApi(studentId.trim(), password);
+    setLoading(true);
+    setErrorMsg('');
 
-      if (res?.success) {
-        if (selectedRole === 'Advisor') {
-          router.push({
-            pathname: '/Advisor/dashboard',
-          });
-        } else {
-          router.push({
-            pathname: '/dashboard',
-            params: { studentId: studentId.trim() },
-          });
-        }
-      } else {
-        setErrorMsg(res?.message || 'Invalid credentials');
-      }
-    } catch (err: any) {
-      // If network fails, allow seamless fallback so user can still preview
-      console.warn('Login request error, proceeding with offline preview:', err.message);
+    try {
       if (selectedRole === 'Advisor') {
-        router.push({
-          pathname: '/Advisor/dashboard',
+        await saveOrClearCredentials(id, password);
+        router.replace({ pathname: '/Advisor/dashboard' });
+        return;
+      }
+
+      // 1. Try student login first
+      const studentRes = await loginStudentApi(id, password);
+      if (studentRes?.success) {
+        await saveOrClearCredentials(id, password);
+        router.replace({ pathname: '/dashboard', params: { studentId: id } });
+        return;
+      }
+
+      // 2. Try admin login
+      const adminRes = await loginAdminApi(id, password);
+      if (adminRes?.success) {
+        await saveOrClearCredentials(id, password);
+        router.replace({
+          pathname: '/admin-dashboard',
+          params: {
+            adminId: adminRes.admin?.adminId || id,
+            adminName: adminRes.admin?.name || 'Dr. Sarah Mitchell',
+            adminRole: adminRes.admin?.role || 'Administrator',
+            adminDept: adminRes.admin?.department || 'Academic Affairs',
+          },
+        });
+        return;
+      }
+
+      setErrorMsg('Invalid ID or password. Please try again.');
+    } catch {
+      // Network fallback — route appropriately based on ID pattern
+      await saveOrClearCredentials(id, password);
+      if (selectedRole === 'Advisor') {
+        router.replace({ pathname: '/Advisor/dashboard' });
+      } else if (id.toUpperCase().startsWith('ADM')) {
+        router.replace({
+          pathname: '/admin-dashboard',
+          params: { adminId: id, adminName: 'Dr. Sarah Mitchell', adminDept: 'Academic Affairs' },
         });
       } else {
-        router.push({
-          pathname: '/dashboard',
-          params: { studentId: studentId.trim() },
-        });
+        router.replace({ pathname: '/dashboard', params: { studentId: id || 'IT21047138' } });
       }
     } finally {
       setLoading(false);
@@ -69,800 +138,396 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          isCompact && styles.scrollContentCompact,
-          isTight && styles.scrollContentTight,
-        ]}
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={styles.root}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View
-          style={[
-            styles.heroCard,
-            isCompact && styles.heroCardCompact,
-            isTight && styles.heroCardTight,
-          ]}
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.brandRow}>
-            <View
-              style={[
-                styles.brandMark,
-                isCompact && styles.brandMarkCompact,
-                isTight && styles.brandMarkTight,
-              ]}
-            >
-              <Text style={styles.iconGlyph}>U</Text>
+          {/* ── Brand Header ─────────────────────────── */}
+          <View style={styles.brandHeader}>
+            <View style={styles.brandMark}>
+              <Ionicons name="school" size={20} color="#4F46E5" />
             </View>
-            <View style={styles.brandCopy}>
-              <Text
-                style={[
-                  styles.brandTitle,
-                  isCompact && styles.brandTitleCompact,
-                  isTight && styles.brandTitleTight,
-                ]}
-              >
-                UNIVERSITY PORTAL
-              </Text>
-              <Text
-                style={[
-                  styles.brandSubtitle,
-                  isCompact && styles.brandSubtitleCompact,
-                  isTight && styles.brandSubtitleTight,
-                ]}
-              >
-                Academic Mobility System
-              </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.brandTitle}>UNIVERSITY PORTAL</Text>
+              <Text style={styles.brandSub}>Academic Mobility & Timetable</Text>
             </View>
-
-            <View
-              style={[
-                styles.onlineBadge,
-                isCompact && styles.onlineBadgeCompact,
-                isTight && styles.onlineBadgeTight,
-              ]}
-            >
+            <View style={styles.onlinePill}>
               <View style={styles.onlineDot} />
-              <Text style={styles.onlineText}>GATEWAY ONLINE</Text>
+              <Text style={styles.onlineText}>ONLINE</Text>
             </View>
           </View>
 
-          <Text
-            style={[
-              styles.title,
-              isCompact && styles.titleCompact,
-              isTight && styles.titleTight,
-            ]}
-          >
-            Student Portal
-          </Text>
-          <Text
-            style={[
-              styles.subtitle,
-              isCompact && styles.subtitleCompact,
-              isTight && styles.subtitleTight,
-            ]}
-          >
-            Sign in to manage registration, clashes and your timetable.
-          </Text>
-
-          <View
-            style={[
-              styles.profileCard,
-              isCompact && styles.profileCardCompact,
-              isTight && styles.profileCardTight,
-            ]}
-          >
-            <Text
-              style={[
-                styles.sectionLabel,
-                isCompact && styles.sectionLabelCompact,
-                isTight && styles.sectionLabelTight,
-              ]}
-            >
-              1. SELECT USER PROFILE
+          {/* ── Hero Title ────────────────────────────── */}
+          <View style={styles.heroSection}>
+            <Text style={styles.heroTitle}>Welcome Back</Text>
+            <Text style={styles.heroSub}>
+              Sign in with your university ID to access courses and timetable.
             </Text>
-            <View
-              style={[
-                styles.profileRow,
-                isCompact && styles.profileRowCompact,
-                isTight && styles.profileRowTight,
-              ]}
-            >
-              {['Student', 'Advisor', 'Monitor', 'Coordinator'].map((item) => {
-                const isActive = item === selectedRole;
+            <View style={styles.roleSelectorRow}>
+              {(['Student', 'Advisor'] as const).map((role) => {
+                const isActive = selectedRole === role;
                 return (
-                <Pressable
-                  key={item}
-                  onPress={() => setSelectedRole(item)}
-                  style={[
-                    styles.profileChip,
-                    isActive && styles.profileChipActive,
-                    isTight && styles.profileChipTight,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.profileChipText,
-                      isActive && styles.profileChipTextActive,
-                      isTight && styles.profileChipTextTight,
-                    ]}
+                  <TouchableOpacity
+                    key={role}
+                    style={[styles.roleChip, isActive && styles.roleChipActive]}
+                    onPress={() => setSelectedRole(role)}
+                    activeOpacity={0.8}
                   >
-                    {item}
-                  </Text>
-                </Pressable>
-              )})}
+                    <Text style={[styles.roleChipText, isActive && styles.roleChipTextActive]}>
+                      {role}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
+          </View>
 
+          {/* ── Form Card ────────────────────────────── */}
+          <View style={styles.card}>
+            {/* Error Banner */}
             {errorMsg ? (
-              <View style={{ backgroundColor: '#FEE2E2', padding: 10, borderRadius: 8, marginBottom: 12 }}>
-                <Text style={{ color: '#DC2626', fontSize: 13, fontWeight: '500' }}>{errorMsg}</Text>
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.errorText}>{errorMsg}</Text>
               </View>
             ) : null}
 
-            <View style={styles.fieldHeaderRow}>
-              <Text style={styles.fieldLabel}>STUDENT ID</Text>
-              <View style={[styles.idBadge, isCompact && styles.idBadgeCompact]}>
-                <Text style={styles.idBadgeText}>REGISTERED ID</Text>
-              </View>
-            </View>
-            <View
-              style={[
-                styles.inputShell,
-                isCompact && styles.inputShellCompact,
-                isTight && styles.inputShellTight,
-              ]}
-            >
-              <Text style={styles.inputGlyph}>ID</Text>
+            {/* User ID */}
+            <Text style={styles.fieldLabel}>UNIVERSITY ID</Text>
+            <View style={styles.inputShell}>
+              <Ionicons name="person-outline" size={18} color="#6366F1" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                value={studentId}
-                onChangeText={setStudentId}
-                placeholder="IT21047138"
-                placeholderTextColor="#6B7280"
+                value={userId}
+                onChangeText={setUserId}
+                placeholder="e.g. IT21047138 or ADM001"
+                placeholderTextColor="#94A3B8"
                 autoCapitalize="characters"
+                autoCorrect={false}
               />
             </View>
 
+            {/* Password */}
             <Text style={styles.fieldLabel}>PASSWORD</Text>
-            <View
-              style={[
-                styles.inputShell,
-                isCompact && styles.inputShellCompact,
-                isTight && styles.inputShellTight,
-              ]}
-            >
-              <Text style={styles.inputGlyph}>PW</Text>
+            <View style={styles.inputShell}>
+              <Ionicons name="lock-closed-outline" size={18} color="#6366F1" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="••••••••••••••"
-                placeholderTextColor="#6B7280"
-                secureTextEntry
+                placeholder="Enter your password"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry={!showPassword}
+                autoCorrect={false}
               />
-              <Text style={styles.eyeGlyph}>◔</Text>
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                  size={19}
+                  color="#94A3B8"
+                />
+              </TouchableOpacity>
             </View>
 
-            <View style={[styles.rowBetween, isTight && styles.rowBetweenTight]}>
-              <View style={styles.rememberRow}>
-                <View style={styles.checkBox}>
-                  <Text style={styles.checkMarkGlyph}>✓</Text>
+            {/* Remember / Forgot */}
+            <View style={styles.rowBetween}>
+              <TouchableOpacity
+                style={styles.rememberRow}
+                onPress={() => setRememberMe(!rememberMe)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
+                  {rememberMe && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
                 </View>
                 <Text style={styles.rememberText}>Remember me</Text>
-              </View>
-              <Text style={styles.linkText}>Forgot password?</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.7}>
+                <Text style={styles.forgotText}>Forgot password?</Text>
+              </TouchableOpacity>
             </View>
 
-            <Pressable
-              style={[
-                styles.primaryButton,
-                isCompact && styles.primaryButtonCompact,
-                isTight && styles.primaryButtonTight,
-                loading && { opacity: 0.7 },
-              ]}
+            {/* Sign In Button */}
+            <TouchableOpacity
+              style={[styles.signInBtn, loading && { opacity: 0.75 }]}
               onPress={handleLogin}
               disabled={loading}
+              activeOpacity={0.88}
             >
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <>
-                  <Text style={styles.primaryButtonText}>Sign In as {selectedRole}</Text>
-                  <Text style={styles.primaryArrowGlyph}>→</Text>
+                  <Text style={styles.signInBtnText}>Sign In</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
                 </>
               )}
-            </Pressable>
+            </TouchableOpacity>
 
-            <Text
-              style={[
-                styles.dividerText,
-                isCompact && styles.dividerTextCompact,
-                isTight && styles.dividerTextTight,
-              ]}
-            >
-              OR FAST AUTHENTICATE
+            {/* Footer Support */}
+            <Text style={styles.footerNote}>
+              Need assistance?{' '}
+              <Text style={styles.footerStrong}>Contact IT Helpdesk</Text>
             </Text>
-
-            <Pressable
-              style={[
-                styles.secondaryButton,
-                isCompact && styles.secondaryButtonCompact,
-                isTight && styles.secondaryButtonTight,
-              ]}
-            >
-              <View style={[styles.secondaryIcon, isTight && styles.secondaryIconTight]}>
-                <Text style={styles.secondaryIconGlyph}>⌘</Text>
-              </View>
-              <Text style={[styles.secondaryButtonText, isTight && styles.secondaryButtonTextTight]}>
-                Authenticate with Face ID
-              </Text>
-              <Text style={styles.secondaryChevronGlyph}>›</Text>
-            </Pressable>
+            <Text style={styles.secureNote}>
+              Secured with 256-bit institutional encryption
+            </Text>
           </View>
-
-          <Text
-            style={[
-              styles.footerHelp,
-              isCompact && styles.footerHelpCompact,
-              isTight && styles.footerHelpTight,
-            ]}
-          >
-            Need help? Contact <Text style={styles.footerHelpStrong}>IT Support (Ext. 4022)</Text>
-          </Text>
-          {!isTight ? (
-            <Text style={[styles.footerSecure, isCompact && styles.footerSecureCompact]}>
-              🛡 Secure 256-bit encrypted academic session
-            </Text>
-          ) : null}
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
+const INDIGO = '#4F46E5';
+
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#171821',
+    backgroundColor: '#F8FAFC',
   },
-
-  scrollContent: {
+  scroll: {
     flexGrow: 1,
-    justifyContent: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 28,
   },
 
-  scrollContentCompact: {
-    paddingVertical: 10,
-  },
-
-  scrollContentTight: {
-    paddingVertical: 6,
-  },
-
-  heroCard: {
-    backgroundColor: '#F7F9FC',
-    borderRadius: 28,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 18,
-    maxWidth: 430,
-    alignSelf: 'center',
-    width: '100%',
-  },
-
-  heroCardCompact: {
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 16,
-  },
-
-  heroCardTight: {
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderRadius: 24,
-  },
-
-  brandRow: {
+  // ── Brand ────────────────────────────────────────
+  brandHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 24,
+    gap: 12,
   },
-
-  brandMarkCompact: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    marginRight: 8,
-  },
-
-  brandMarkTight: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: 7,
-  },
-
   brandMark: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#EAE7FF',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
   },
-
-  iconGlyph: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#5B4DF5',
-  },
-
-  brandCopy: {
-    flex: 1,
-  },
-
   brandTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1F2937',
-    letterSpacing: 0.3,
-  },
-
-  brandTitleCompact: {
     fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: 0.6,
   },
-
-  brandTitleTight: {
+  brandSub: {
     fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+    fontWeight: '500',
   },
-
-  brandSubtitle: {
-    marginTop: 2,
-    fontSize: 11.5,
-    color: '#6B7280',
-  },
-
-  brandSubtitleCompact: {
-    fontSize: 10.5,
-  },
-
-  brandSubtitleTight: {
-    fontSize: 9.5,
-  },
-
-  onlineBadge: {
+  onlinePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#19C37D',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-
-  onlineBadgeCompact: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-
-  onlineBadgeTight: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-
-  onlineDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#19C37D',
-    marginRight: 6,
-  },
-
-  onlineText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#19A86B',
-    letterSpacing: 0.35,
-  },
-
-  title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#111827',
-    marginTop: 4,
-  },
-
-  titleCompact: {
-    fontSize: 22,
-  },
-
-  titleTight: {
-    fontSize: 20,
-    marginTop: 2,
-  },
-
-  subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 6,
-    marginBottom: 14,
-  },
-
-  subtitleCompact: {
-    fontSize: 12.5,
-    marginBottom: 12,
-  },
-
-  subtitleTight: {
-    fontSize: 11.5,
-    marginTop: 4,
-    marginBottom: 10,
-  },
-
-  profileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 14,
-    shadowColor: '#111827',
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
-  },
-
-  profileCardCompact: {
-    padding: 12,
+    backgroundColor: '#ECFDF5',
     borderRadius: 20,
-  },
-
-  profileCardTight: {
-    padding: 10,
-    borderRadius: 18,
-  },
-
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#9CA3AF',
-    marginBottom: 12,
-  },
-
-  sectionLabelCompact: {
-    fontSize: 11,
-    marginBottom: 10,
-  },
-
-  sectionLabelTight: {
-    fontSize: 10.5,
-    marginBottom: 8,
-  },
-
-  profileRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-
-  profileRowCompact: {
-    gap: 6,
-    marginBottom: 12,
-  },
-
-  profileRowTight: {
-    gap: 5,
-    marginBottom: 10,
-  },
-
-  profileChip: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 16,
-    paddingVertical: 9,
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#A7F3D0',
+    gap: 5,
+  },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  onlineText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: 0.5,
   },
 
-  profileChipActive: {
-    backgroundColor: '#5B4DF5',
-    borderColor: '#5B4DF5',
+  // ── Hero ─────────────────────────────────────────
+  heroSection: {
+    marginBottom: 24,
   },
-
-  profileChipText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#4B5563',
+  heroTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 6,
+    letterSpacing: -0.5,
   },
-
-  profileChipTextActive: {
+  heroSub: {
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 20,
+  },
+  roleSelectorRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  roleChip: {
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  roleChipActive: {
+    backgroundColor: INDIGO,
+    borderColor: INDIGO,
+  },
+  roleChipText: {
+    color: '#4338CA',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  roleChipTextActive: {
     color: '#FFFFFF',
   },
 
-  profileChipTight: {
-    paddingVertical: 7,
-    paddingHorizontal: 9,
-    borderRadius: 14,
+  // ── Card ─────────────────────────────────────────
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
 
-  profileChipTextTight: {
-    fontSize: 11.5,
-  },
-
-  fieldHeaderRow: {
+  errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#DC2626',
+    fontWeight: '500',
   },
 
   fieldLabel: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#374151',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+    letterSpacing: 0.6,
     marginBottom: 8,
-    marginTop: 2,
+    marginTop: 4,
   },
-
-  idBadge: {
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-
-  idBadgeCompact: {
-    paddingHorizontal: 9,
-  },
-
-  idBadgeText: {
-    color: '#5B4DF5',
-    fontSize: 10.5,
-    fontWeight: '800',
-  },
-
   inputShell: {
-    minHeight: 48,
-    backgroundColor: '#FAFAFC',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
-    gap: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    height: 52,
+    marginBottom: 18,
   },
-
-  inputShellCompact: {
-    minHeight: 44,
-    marginBottom: 12,
-    paddingHorizontal: 12,
+  inputIcon: {
+    marginRight: 10,
   },
-
-  inputShellTight: {
-    minHeight: 40,
-    marginBottom: 10,
-    paddingHorizontal: 10,
-  },
-
-  inputGlyph: {
-    width: 22,
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-
-  eyeGlyph: {
-    fontSize: 16,
-    color: '#B0B7C3',
-  },
-
   input: {
-    width: '100%',
     flex: 1,
     fontSize: 15,
-    color: '#111827',
-    paddingVertical: 0,
+    color: '#0F172A',
+    fontWeight: '500',
   },
 
   rowBetween: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 22,
   },
-
-  rowBetweenTight: {
-    marginBottom: 10,
-  },
-
   rememberRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-
-  checkBox: {
+  checkbox: {
     width: 18,
     height: 18,
     borderRadius: 5,
-    backgroundColor: '#5B4DF5',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
   },
-
-  checkMarkGlyph: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    lineHeight: 12,
+  checkboxActive: {
+    backgroundColor: INDIGO,
+    borderColor: INDIGO,
   },
-
   rememberText: {
-    fontSize: 12.5,
-    color: '#4B5563',
+    fontSize: 13,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  forgotText: {
+    fontSize: 13,
+    color: INDIGO,
     fontWeight: '600',
   },
 
-  linkText: {
-    fontSize: 12.5,
-    color: '#5B4DF5',
+  signInBtn: {
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: INDIGO,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 20,
+    shadowColor: INDIGO,
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  signInBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '700',
   },
 
-  primaryButton: {
-    minHeight: 52,
-    backgroundColor: '#5B4DF5',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    shadowColor: '#5B4DF5',
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 4,
-  },
-
-  primaryButtonCompact: {
-    minHeight: 48,
-  },
-
-  primaryButtonTight: {
-    minHeight: 44,
-  },
-
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-
-  primaryArrowGlyph: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '900',
-  },
-
-  dividerText: {
+  footerNote: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#B0B7C3',
+    color: '#64748B',
     textAlign: 'center',
-    marginVertical: 12,
+    marginBottom: 6,
   },
-
-  dividerTextCompact: {
-    marginVertical: 10,
+  footerStrong: {
+    color: INDIGO,
+    fontWeight: '600',
   },
-
-  dividerTextTight: {
-    marginVertical: 8,
-    fontSize: 10.5,
-  },
-
-  secondaryButton: {
-    minHeight: 50,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-  },
-
-  secondaryButtonCompact: {
-    minHeight: 46,
-    paddingHorizontal: 12,
-  },
-
-  secondaryButtonTight: {
-    minHeight: 42,
-    paddingHorizontal: 10,
-    gap: 8,
-  },
-
-  secondaryIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#F2EEFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  secondaryIconTight: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
-  },
-
-  secondaryIconGlyph: {
-    color: '#5B4DF5',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-
-  secondaryChevronGlyph: {
-    color: '#B0B7C3',
-    fontSize: 20,
-    fontWeight: '900',
-  },
-
-  secondaryButtonText: {
-    flex: 1,
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: '#374151',
-  },
-
-  secondaryButtonTextTight: {
-    fontSize: 13,
-  },
-
-  footerHelp: {
-    textAlign: 'center',
-    color: '#94A3B8',
-    marginTop: 12,
-    fontSize: 12.5,
-  },
-
-  footerHelpCompact: {
-    marginTop: 10,
-    fontSize: 11.5,
-  },
-
-  footerHelpTight: {
-    marginTop: 8,
+  secureNote: {
     fontSize: 11,
-  },
-
-  footerHelpStrong: {
-    color: '#5B4DF5',
-    fontWeight: '800',
-  },
-
-  footerSecure: {
+    color: '#94A3B8',
     textAlign: 'center',
-    color: '#0F9D58',
-    marginTop: 6,
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
-
-  footerSecureCompact: {
-    fontSize: 11.5,
   },
 });
