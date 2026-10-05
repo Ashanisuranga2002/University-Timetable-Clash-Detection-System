@@ -132,9 +132,10 @@ export default function CourseSelectionScreen() {
         setCourses(courseRes.courses);
       }
 
-      if (dashRes?.success && dashRes.registration?.courses) {
+      const regCourses = dashRes?.academics?.courses || dashRes?.registration?.courses;
+      if (dashRes?.success && regCourses && Array.isArray(regCourses)) {
         const enrolled = new Set<string>();
-        dashRes.registration.courses.forEach((c: any) => {
+        regCourses.forEach((c: any) => {
           if (c.courseCode) enrolled.add(c.courseCode);
         });
         if (enrolled.size > 0) {

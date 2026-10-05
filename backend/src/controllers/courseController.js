@@ -13,7 +13,7 @@ const getAllCourses = async (req, res) => {
       query.type = type;
     }
 
-    const courses = await Course.find(query).sort({ type: 1, courseCode: 1 });
+    const courses = await Course.find(query).sort({ type: 1, courseCode: 1 }).lean();
 
     res.status(200).json({
       success: true,

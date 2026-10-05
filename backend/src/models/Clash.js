@@ -63,4 +63,6 @@ const clashSchema = new mongoose.Schema(
     }
 );
 
+clashSchema.index({ student: 1, status: 1 });
+
 module.exports = mongoose.model("Clash", clashSchema);
