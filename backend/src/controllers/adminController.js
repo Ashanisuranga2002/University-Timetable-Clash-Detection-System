@@ -102,25 +102,29 @@ const deleteCourse = async (req, res) => {
 // Admin: Get admin dashboard summary
 const getAdminDashboard = async (req, res) => {
   try {
-    const totalCourses = await Course.countDocuments({ isActive: true });
-    const totalStudents = await Student.countDocuments();
-    const totalRegistrations = await Registration.countDocuments();
-
-    const confirmedRegistrations = await Registration.countDocuments({ status: "confirmed" });
-    const blockedRegistrations = await Registration.countDocuments({ status: "blocked" });
-    const draftRegistrations = await Registration.countDocuments({ status: "draft" });
-
-    const coreCount = await Course.countDocuments({ type: "Core", isActive: true });
-    const electiveCount = await Course.countDocuments({ type: "Elective", isActive: true });
-
-    const recentCourses = await Course.find({ isActive: true })
-      .sort({ createdAt: -1 })
-      .limit(5);
-
-    const recentStudents = await Student.find()
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .select("studentId name programme semester createdAt");
+    const [
+      totalCourses,
+      totalStudents,
+      totalRegistrations,
+      confirmedRegistrations,
+      blockedRegistrations,
+      draftRegistrations,
+      coreCount,
+      electiveCount,
+      recentCourses,
+      recentStudents,
+    ] = await Promise.all([
+      Course.countDocuments({ isActive: true }),
+      Student.countDocuments(),
+      Registration.countDocuments(),
+      Registration.countDocuments({ status: "confirmed" }),
+      Registration.countDocuments({ status: "blocked" }),
+      Registration.countDocuments({ status: "draft" }),
+      Course.countDocuments({ type: "Core", isActive: true }),
+      Course.countDocuments({ type: "Elective", isActive: true }),
+      Course.find({ isActive: true }).sort({ createdAt: -1 }).limit(5).lean(),
+      Student.find().sort({ createdAt: -1 }).limit(5).select("studentId name programme semester createdAt").lean(),
+    ]);
 
     res.status(200).json({
       success: true,
@@ -152,7 +156,7 @@ const getAllCoursesAdmin = async (req, res) => {
     const showAll = req.query.all === "true";
     const query = showAll ? {} : { isActive: true };
 
-    const courses = await Course.find(query).sort({ createdAt: -1 });
+    const courses = await Course.find(query).sort({ createdAt: -1 }).lean();
 
     res.status(200).json({ success: true, count: courses.length, courses });
   } catch (error) {

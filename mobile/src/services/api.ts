@@ -1,32 +1,80 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-// Use your machine IP for physical devices & Expo Go; localhost for web / iOS simulator
-const LOCAL_IP = '10.243.34.145';
 const PORT = '5001';
 
-export const API_BASE_URL =
+// Automatically detect host machine IP when running Expo Go or native
+const getDetectedHost = (): string => {
+  if (Platform.OS === 'web') return 'localhost';
+
+  // Expo Go debugger host (e.g. "192.168.1.100:8081" -> "192.168.1.100")
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost ||
+    (Constants as any).manifest?.debuggerHost;
+
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip && ip.length > 3) return ip;
+  }
+
+  // Fallbacks if debuggerHost is undefined
+  return '192.168.1.100';
+};
+
+let activeBaseUrl =
   Platform.OS === 'web'
     ? `http://localhost:${PORT}/api`
-    : `http://${LOCAL_IP}:${PORT}/api`;
+    : `http://${getDetectedHost()}:${PORT}/api`;
 
-const fallback = (path: string) =>
-  Platform.OS === 'web' ? null : `http://localhost:${PORT}/api${path}`;
-
-async function apiFetch(path: string, options?: RequestInit) {
+async function fetchWithTimeout(url: string, options?: RequestInit, timeoutMs = 3000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`${API_BASE_URL}${path}`, options);
-    return await res.json();
-  } catch (e: any) {
-    const fb = fallback(path);
-    if (!fb) throw e;
-    try {
-      const res = await fetch(fb, options);
-      return await res.json();
-    } catch {
-      throw new Error(e?.message || 'Network error');
-    }
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+    return res;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
   }
 }
+
+async function apiFetch(path: string, options?: RequestInit) {
+  // Try primary detected endpoint first
+  try {
+    const res = await fetchWithTimeout(`${activeBaseUrl}${path}`, options, 3000);
+    if (res.ok || res.status < 500) {
+      return await res.json();
+    }
+  } catch {
+    // Continue to fast candidates
+  }
+
+  // Fast fallbacks if primary failed
+  const candidates = [
+    `http://192.168.1.100:${PORT}/api`,
+    `http://192.168.8.199:${PORT}/api`,
+    `http://localhost:${PORT}/api`,
+    `http://10.0.2.2:${PORT}/api`,
+  ].filter((url) => url !== activeBaseUrl);
+
+  for (const baseUrl of candidates) {
+    try {
+      const res = await fetchWithTimeout(`${baseUrl}${path}`, options, 2000);
+      if (res.ok || res.status < 500) {
+        activeBaseUrl = baseUrl; // Remember working endpoint for instant subsequent loads
+        return await res.json();
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+
+  throw new Error('Could not connect to server. Ensure backend is running.');
+}
+
+export const API_BASE_URL = activeBaseUrl;
 
 export function loginStudentApi(studentId: string, password: string) {
   return apiFetch('/auth/login', {
