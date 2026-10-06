@@ -31,7 +31,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
 
   const [selectedRole, setSelectedRole] =
-    useState<'Student' | 'Advisor'>('Student');
+    useState<'Student' | 'Advisor' | 'Admin'>('Student');
 
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -160,6 +160,32 @@ export default function LoginScreen() {
       }
 
       // =====================================================
+      // ADMIN LOGIN
+      // =====================================================
+
+      if (selectedRole === 'Admin') {
+        const adminRes = await loginAdminApi(id, password);
+
+        if (adminRes?.success) {
+          await saveOrClearCredentials(id, password);
+
+          router.replace({
+            pathname: '/admin',
+            params: {
+              adminId: adminRes.admin?.adminId || id,
+              adminName: adminRes.admin?.name || 'Dr. Sarah Mitchell',
+              adminRole: adminRes.admin?.role || 'Administrator',
+              adminDept: adminRes.admin?.department || 'Academic Affairs',
+            },
+          });
+        } else {
+          setErrorMsg('Invalid Admin ID or password.');
+        }
+
+        return;
+      }
+
+      // =====================================================
       // STUDENT LOGIN
       // =====================================================
 
@@ -180,48 +206,6 @@ export default function LoginScreen() {
 
           params: {
             studentId: id,
-          },
-        });
-
-        return;
-      }
-
-      // =====================================================
-      // ADMIN LOGIN
-      // =====================================================
-
-      const adminRes =
-        await loginAdminApi(
-          id,
-          password,
-        );
-
-      if (adminRes?.success) {
-        await saveOrClearCredentials(
-          id,
-          password,
-        );
-
-        router.replace({
-          pathname: '/admin-dashboard',
-
-          params: {
-            adminId:
-              adminRes.admin?.adminId ||
-              id,
-
-            adminName:
-              adminRes.admin?.name ||
-              'Dr. Sarah Mitchell',
-
-            adminRole:
-              adminRes.admin?.role ||
-              'Administrator',
-
-            adminDept:
-              adminRes.admin
-                ?.department ||
-              'Academic Affairs',
           },
         });
 
@@ -272,12 +256,11 @@ export default function LoginScreen() {
       // =====================================================
 
       else if (
-        id
-          .toUpperCase()
-          .startsWith('ADM')
+        selectedRole === 'Admin' ||
+        id.toUpperCase().startsWith('ADM')
       ) {
         router.replace({
-          pathname: '/admin-dashboard',
+          pathname: '/admin',
 
           params: {
             adminId: id,
@@ -472,6 +455,7 @@ export default function LoginScreen() {
                 [
                   'Student',
                   'Advisor',
+                  'Admin',
                 ] as const
               ).map((role) => {
                 const isActive =

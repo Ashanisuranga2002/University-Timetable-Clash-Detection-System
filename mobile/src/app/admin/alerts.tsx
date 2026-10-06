@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,11 @@ import {
   StyleSheet,
   Pressable,
   Alert,
+  TextInput,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { BottomAdminTabs } from '@/components/admin/BottomAdminTabs';
 import { StatusBadge } from '@/components/admin/StatusBadge';
@@ -19,8 +22,14 @@ import {
   regionalNodes,
   RegionalNode,
 } from '@/constants/adminMonitoringData';
+import {
+  deleteAlertApi,
+  fetchAlertsApi,
+  updateAlertStatusApi,
+} from '@/services/api';
 
 type FilterKey = 'all' | AlertSeverity;
+type StateFilterKey = 'all' | 'active' | 'acknowledged' | 'resolved';
 
 function MiniSparkline({ color }: { color: string }) {
   const points = [30, 45, 35, 55, 48, 70, 65];
@@ -77,17 +86,22 @@ const nodeStyles = StyleSheet.create({
 function AlertCard({
   alert,
   onViewDetails,
-  onMute,
-  muted,
+  onAcknowledge,
+  onResolve,
+  onReopen,
+  onDismiss,
 }: {
   alert: MonitoringAlert;
   onViewDetails?: () => void;
-  onMute?: () => void;
-  muted?: boolean;
+  onAcknowledge?: () => void;
+  onResolve?: () => void;
+  onReopen?: () => void;
+  onDismiss?: () => void;
 }) {
   const isHigh = alert.severity === 'high';
   const isMed = alert.severity === 'medium';
   const isResolved = alert.state === 'resolved';
+  const isAck = alert.state === 'acknowledged';
   const borderColor = isHigh ? AC.danger : isMed ? AC.warning : AC.success;
 
   return (
@@ -103,9 +117,9 @@ function AlertCard({
           <StatusBadge variant={alert.severity} label={alert.severity.toUpperCase()} size="sm" />
           <StatusBadge
             variant={
-              isResolved ? 'resolved' : alert.state === 'active' ? 'active' : 'monitoring'
+              isResolved ? 'resolved' : isAck ? 'monitoring' : alert.state === 'active' ? 'active' : 'monitoring'
             }
-            label={isResolved ? 'RESOLVED' : alert.state === 'active' ? 'ACTIVE' : 'MONITORING'}
+            label={isResolved ? 'RESOLVED' : isAck ? 'ACKNOWLEDGED' : alert.state.toUpperCase()}
             size="sm"
           />
         </View>
@@ -115,7 +129,7 @@ function AlertCard({
       <Text style={aStyles.title}>{alert.title}</Text>
       <View style={aStyles.serviceRow}>
         <Text style={aStyles.serviceText}>
-          {alert.service} - {alert.worker}
+          {alert.service} • {alert.worker}
         </Text>
       </View>
 
@@ -151,30 +165,57 @@ function AlertCard({
         </View>
       ) : null}
 
-      {!isResolved ? (
-        <View style={aStyles.actions}>
-          {isHigh ? (
-            <Pressable
-              style={aStyles.viewDetailsBtn}
-              onPress={onViewDetails}
-              accessibilityRole="button"
-              accessibilityLabel="View Details"
-            >
-              <Text style={aStyles.viewDetailsText}>View Details</Text>
-            </Pressable>
-          ) : null}
-          {isMed ? (
-            <Pressable
-              style={[aStyles.muteBtn, muted ? aStyles.mutedBtn : null]}
-              onPress={onMute}
-              accessibilityRole="button"
-              accessibilityLabel={muted ? 'Unmute' : 'Mute'}
-            >
-              <Text style={aStyles.muteText}>{muted ? 'Muted' : 'Mute'}</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
+      {/* Admin Action Row */}
+      <View style={aStyles.actions}>
+        <Pressable
+          style={aStyles.btnGhost}
+          onPress={onViewDetails}
+          accessibilityRole="button"
+          accessibilityLabel="View Details"
+        >
+          <Text style={aStyles.btnGhostText}>Details</Text>
+        </Pressable>
+
+        {!isResolved && !isAck && (
+          <Pressable
+            style={aStyles.btnAck}
+            onPress={onAcknowledge}
+            accessibilityRole="button"
+            accessibilityLabel="Acknowledge"
+          >
+            <Text style={aStyles.btnAckText}>Acknowledge</Text>
+          </Pressable>
+        )}
+
+        {!isResolved ? (
+          <Pressable
+            style={aStyles.btnResolve}
+            onPress={onResolve}
+            accessibilityRole="button"
+            accessibilityLabel="Resolve"
+          >
+            <Text style={aStyles.btnResolveText}>Resolve</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            style={aStyles.btnReopen}
+            onPress={onReopen}
+            accessibilityRole="button"
+            accessibilityLabel="Reopen"
+          >
+            <Text style={aStyles.btnReopenText}>Reopen</Text>
+          </Pressable>
+        )}
+
+        <Pressable
+          style={aStyles.btnDismiss}
+          onPress={onDismiss}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss Alert"
+        >
+          <Text style={aStyles.btnDismissText}>Dismiss</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -189,11 +230,11 @@ const aStyles = StyleSheet.create({
     padding: 12,
     gap: 6,
   },
-  resolvedCard: { backgroundColor: AC.successLight },
+  resolvedCard: { backgroundColor: '#F0FDF4' },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   badges: { flexDirection: 'row', gap: 6 },
   time: { fontSize: 11, color: AC.textSecondary, fontWeight: '600' },
-  title: { fontSize: 16, fontWeight: '800', color: AC.textPrimary, marginTop: 2 },
+  title: { fontSize: 15, fontWeight: '800', color: AC.textPrimary, marginTop: 2 },
   serviceRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   serviceText: { fontSize: 11, color: AC.textSecondary },
   metricsRow: {
@@ -212,137 +253,279 @@ const aStyles = StyleSheet.create({
   metricVal: { fontSize: 18, fontWeight: '800' },
   impactRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   impactDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: AC.danger },
-  impactText: { fontSize: 11, color: AC.textSecondary },
+  impactText: { fontSize: 11, color: AC.textSecondary, flex: 1 },
   resolvedInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   resolvedNote: { fontSize: 11, color: AC.success, flex: 1 },
   ttr: { fontSize: 12, fontWeight: '700', color: AC.textSecondary },
-  actions: { marginTop: 4 },
-  viewDetailsBtn: {
-    backgroundColor: AC.danger,
-    borderRadius: AR.button,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    alignSelf: 'flex-end',
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: AC.borderLight,
+    flexWrap: 'wrap',
   },
-  viewDetailsText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
-  muteBtn: {
-    borderWidth: 1,
-    borderColor: AC.border,
-    borderRadius: AR.button,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    alignSelf: 'flex-end',
+  btnGhost: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: AR.chip,
+    backgroundColor: AC.borderLight,
   },
-  mutedBtn: { backgroundColor: AC.borderLight },
-  muteText: { fontSize: 12, fontWeight: '600', color: AC.textSecondary },
+  btnGhostText: { fontSize: 11, fontWeight: '600', color: AC.textPrimary },
+  btnAck: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: AR.chip,
+    backgroundColor: AC.warningLight,
+  },
+  btnAckText: { fontSize: 11, fontWeight: '700', color: AC.warningText },
+  btnResolve: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: AR.chip,
+    backgroundColor: AC.successLight,
+  },
+  btnResolveText: { fontSize: 11, fontWeight: '700', color: AC.successText },
+  btnReopen: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: AR.chip,
+    backgroundColor: AC.primaryLight,
+  },
+  btnReopenText: { fontSize: 11, fontWeight: '700', color: AC.primary },
+  btnDismiss: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: AR.chip,
+    backgroundColor: AC.dangerLight,
+  },
+  btnDismissText: { fontSize: 11, fontWeight: '700', color: AC.dangerText },
 });
 
 export default function AlertsScreen() {
-  const [filter, setFilter] = useState<FilterKey>('all');
-  const [mutedIds, setMutedIds] = useState<Set<string>>(new Set());
-  const [acknowledged, setAcknowledged] = useState(false);
+  const [alerts, setAlerts] = useState<MonitoringAlert[]>(systemAlerts);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filters: { key: FilterKey; label: string; count: number }[] = [
-    { key: 'all', label: 'All', count: systemAlerts.length },
-    {
-      key: 'high',
-      label: 'High',
-      count: systemAlerts.filter(a => a.severity === 'high').length,
-    },
-    {
-      key: 'medium',
-      label: 'Med',
-      count: systemAlerts.filter(a => a.severity === 'medium').length,
-    },
-    { key: 'low', label: 'Low', count: systemAlerts.filter(a => a.severity === 'low').length },
-  ];
+  const [severityFilter, setSeverityFilter] = useState<FilterKey>('all');
+  const [stateFilter, setStateFilter] = useState<StateFilterKey>('all');
+  const [search, setSearch] = useState('');
 
-  const filtered =
-    filter === 'all' ? systemAlerts : systemAlerts.filter(a => a.severity === filter);
-
-  function toggleMute(id: string) {
-    setMutedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
+  const loadAlerts = useCallback(async () => {
+    try {
+      const res = await fetchAlertsApi();
+      if (res && res.data && res.data.length > 0) {
+        // Map backend alerts to MonitoringAlert interface
+        const mapped: MonitoringAlert[] = res.data.map((item: any) => ({
+          id: item.alertId || item._id,
+          title: item.title,
+          service: item.service,
+          worker: item.worker || 'Worker 01',
+          time: item.time || 'Active',
+          severity: (item.severity === 'critical' ? 'high' : item.severity) as AlertSeverity,
+          state: item.state as any,
+          metricLabel1: item.metricLabel1 || undefined,
+          metricValue1: item.metricValue1 || undefined,
+          metricLabel2: item.metricLabel2 || undefined,
+          metricValue2: item.metricValue2 || undefined,
+          impactNote: item.impactNote || undefined,
+          resolvedNote: item.resolvedNote || undefined,
+          ttr: item.ttr || undefined,
+        }));
+        setAlerts(mapped);
       }
-      return next;
-    });
-  }
+    } catch {
+      // Fallback to local default alerts
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
-  function handleAcknowledge() {
-    Alert.alert('Acknowledge All Alerts?', 'This will mark all active alerts as acknowledged.', [
+  useFocusEffect(
+    useCallback(() => {
+      loadAlerts();
+    }, [loadAlerts])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadAlerts();
+  };
+
+  const handleAcknowledgeAlert = async (alertId: string) => {
+    try {
+      await updateAlertStatusApi(alertId, 'acknowledged');
+      setAlerts(prev =>
+        prev.map(a => (a.id === alertId ? { ...a, state: 'acknowledged' as any } : a))
+      );
+      Alert.alert('Acknowledged', `Incident ${alertId} has been acknowledged.`);
+    } catch {
+      setAlerts(prev =>
+        prev.map(a => (a.id === alertId ? { ...a, state: 'acknowledged' as any } : a))
+      );
+    }
+  };
+
+  const handleResolveAlert = async (alertId: string) => {
+    try {
+      await updateAlertStatusApi(alertId, 'resolved', 'Resolved by Administrator');
+      setAlerts(prev =>
+        prev.map(a =>
+          a.id === alertId
+            ? { ...a, state: 'resolved', resolvedNote: 'Resolved by Administrator', ttr: 'Completed' }
+            : a
+        )
+      );
+      Alert.alert('Resolved', `Incident ${alertId} marked as resolved.`);
+    } catch {
+      setAlerts(prev =>
+        prev.map(a =>
+          a.id === alertId
+            ? { ...a, state: 'resolved', resolvedNote: 'Resolved by Administrator' }
+            : a
+        )
+      );
+    }
+  };
+
+  const handleReopenAlert = async (alertId: string) => {
+    try {
+      await updateAlertStatusApi(alertId, 'active');
+      setAlerts(prev =>
+        prev.map(a => (a.id === alertId ? { ...a, state: 'active' } : a))
+      );
+      Alert.alert('Reopened', `Incident ${alertId} has been reopened.`);
+    } catch {
+      setAlerts(prev =>
+        prev.map(a => (a.id === alertId ? { ...a, state: 'active' } : a))
+      );
+    }
+  };
+
+  const handleDismissAlert = (alertId: string) => {
+    Alert.alert(
+      'Dismiss Alert',
+      `Are you sure you want to dismiss incident ${alertId}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Dismiss',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteAlertApi(alertId);
+            } catch {
+              // local remove
+            }
+            setAlerts(prev => prev.filter(a => a.id !== alertId));
+            Alert.alert('Dismissed', `Alert ${alertId} has been removed.`);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleAcknowledgeAll = () => {
+    Alert.alert('Acknowledge All Alerts?', 'Mark all active alerts as acknowledged?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Acknowledge', onPress: () => setAcknowledged(true) },
+      {
+        text: 'Acknowledge All',
+        onPress: () => {
+          setAlerts(prev =>
+            prev.map(a => (a.state === 'active' ? { ...a, state: 'acknowledged' as any } : a))
+          );
+          Alert.alert('Success', 'All active alerts acknowledged.');
+        },
+      },
     ]);
-  }
+  };
 
-  function handleExport() {
-    Alert.alert('Export', 'Incident log prepared for export. (CSV)');
-  }
+  const filtered = alerts.filter(a => {
+    if (severityFilter !== 'all' && a.severity !== severityFilter) return false;
+    if (stateFilter !== 'all' && a.state !== stateFilter) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return (
+        a.title.toLowerCase().includes(q) ||
+        a.service.toLowerCase().includes(q) ||
+        a.id.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  const severityFilters: { key: FilterKey; label: string; count: number }[] = [
+    { key: 'all', label: 'All', count: alerts.length },
+    { key: 'high', label: 'High', count: alerts.filter(a => a.severity === 'high').length },
+    { key: 'medium', label: 'Med', count: alerts.filter(a => a.severity === 'medium').length },
+    { key: 'low', label: 'Low', count: alerts.filter(a => a.severity === 'low').length },
+  ];
 
   return (
     <View style={styles.screen}>
-      <AdminHeader title="System Alerts" />
+      <AdminHeader title="System Alerts" showBack onBack={() => router.push('/admin')} />
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Incident Monitor */}
+        {/* Incident Monitor Banner */}
         <View style={styles.section}>
           <View style={styles.monitorCard}>
             <View style={styles.monitorLeft}>
               <Text style={styles.monitorIcon}>INC</Text>
               <View>
                 <Text style={styles.monitorTitle}>Incident Monitor</Text>
-                <Text style={styles.monitorSub}>SLA Target: 99.98%</Text>
+                <Text style={styles.monitorSub}>SLA Target: 99.98% • Live Watch</Text>
               </View>
             </View>
-            <Pressable style={styles.liveTailBtn} accessibilityRole="button" accessibilityLabel="Live Tail">
+            <View style={styles.liveTailBtn}>
               <View style={styles.liveDot} />
               <Text style={styles.liveTailText}>LIVE TAIL</Text>
-            </Pressable>
+            </View>
           </View>
         </View>
 
-        {/* Filters */}
+        {/* Search Input */}
+        <View style={styles.searchBox}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search alerts by title or service..."
+            placeholderTextColor={AC.textTertiary}
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch('')} hitSlop={8}>
+              <Text style={styles.clearIcon}>✕</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* Severity Filters */}
         <View style={styles.section}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.filterRow}>
-              {filters.map(f => (
+              {severityFilters.map(f => (
                 <Pressable
                   key={f.key}
-                  style={[styles.filterTab, filter === f.key ? styles.filterTabActive : null]}
-                  onPress={() => setFilter(f.key)}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: filter === f.key }}
+                  style={[styles.filterTab, severityFilter === f.key ? styles.filterTabActive : null]}
+                  onPress={() => setSeverityFilter(f.key)}
                 >
-                  {f.key !== 'all' ? (
-                    <View
-                      style={[
-                        styles.filterDot,
-                        {
-                          backgroundColor:
-                            f.key === 'high'
-                              ? AC.danger
-                              : f.key === 'medium'
-                              ? AC.warning
-                              : AC.success,
-                        },
-                      ]}
-                    />
-                  ) : null}
                   <Text
                     style={[
                       styles.filterText,
-                      filter === f.key ? styles.filterTextActive : null,
+                      severityFilter === f.key ? styles.filterTextActive : null,
                     ]}
                   >
-                    {f.label} {f.count}
+                    {f.label} ({f.count})
                   </Text>
                 </Pressable>
               ))}
@@ -350,21 +533,57 @@ export default function AlertsScreen() {
           </ScrollView>
         </View>
 
+        {/* Status Pills */}
+        <View style={styles.statusPillsRow}>
+          {(['all', 'active', 'acknowledged', 'resolved'] as StateFilterKey[]).map(s => (
+            <Pressable
+              key={s}
+              style={[styles.statusPill, stateFilter === s ? styles.statusPillActive : null]}
+              onPress={() => setStateFilter(s)}
+            >
+              <Text
+                style={[
+                  styles.statusPillText,
+                  stateFilter === s ? styles.statusPillTextActive : null,
+                ]}
+              >
+                {s.toUpperCase()}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Incidents Count */}
         <View style={styles.section}>
-          <Text style={styles.showingText}>Showing {filtered.length} recorded incidents today</Text>
+          <Text style={styles.showingText}>Showing {filtered.length} recorded incidents</Text>
         </View>
 
         {/* Alert Cards */}
         <View style={[styles.section, styles.alertsGap]}>
-          {filtered.map(alert => (
-            <AlertCard
-              key={alert.id}
-              alert={alert}
-              muted={mutedIds.has(alert.id)}
-              onMute={() => toggleMute(alert.id)}
-              onViewDetails={() => router.push('/admin/issue-details')}
-            />
-          ))}
+          {filtered.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyIcon}>✅</Text>
+              <Text style={styles.emptyTitle}>No matching alerts</Text>
+              <Text style={styles.emptySub}>All systems operating within normal parameters.</Text>
+            </View>
+          ) : (
+            filtered.map(alert => (
+              <AlertCard
+                key={alert.id}
+                alert={alert}
+                onViewDetails={() =>
+                  router.push({
+                    pathname: '/admin/issue-details',
+                    params: { alertId: alert.id },
+                  })
+                }
+                onAcknowledge={() => handleAcknowledgeAlert(alert.id)}
+                onResolve={() => handleResolveAlert(alert.id)}
+                onReopen={() => handleReopenAlert(alert.id)}
+                onDismiss={() => handleDismissAlert(alert.id)}
+              />
+            ))
+          )}
         </View>
 
         {/* Regional Cascade Risk */}
@@ -394,26 +613,16 @@ export default function AlertsScreen() {
         {/* Bottom Actions */}
         <View style={[styles.section, styles.btnSection]}>
           <Pressable
-            style={[styles.primaryBtn, acknowledged ? styles.primaryBtnAck : null]}
-            onPress={handleAcknowledge}
+            style={styles.primaryBtn}
+            onPress={handleAcknowledgeAll}
             accessibilityRole="button"
             accessibilityLabel="Acknowledge All Alerts"
           >
-            <Text style={styles.primaryBtnText}>
-              {acknowledged ? 'All Alerts Acknowledged' : 'Acknowledge All Alerts'}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={styles.secondaryBtn}
-            onPress={handleExport}
-            accessibilityRole="button"
-            accessibilityLabel="Export Incident Log"
-          >
-            <Text style={styles.secondaryBtnText}>Export Incident Log (.csv)</Text>
+            <Text style={styles.primaryBtnText}>✓ Acknowledge All Active Alerts</Text>
           </Pressable>
         </View>
 
-        <View style={{ height: 16 }} />
+        <View style={{ height: 24 }} />
       </ScrollView>
       <BottomAdminTabs />
     </View>
@@ -423,100 +632,129 @@ export default function AlertsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: AC.bgApp },
   scroll: { flex: 1 },
-  content: { paddingBottom: 8 },
-  section: { paddingHorizontal: AS.screenH, marginTop: 12 },
-  alertsGap: { gap: 10 },
+  content: { padding: AS.screenH, gap: 12 },
+  section: { gap: 8 },
   monitorCard: {
     backgroundColor: AC.bgCard,
     borderRadius: AR.card,
     borderWidth: 1,
     borderColor: AC.border,
-    padding: 12,
+    padding: AS.cardH,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   monitorLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  monitorIcon: { fontSize: 10, color: AC.warning, fontWeight: '800' },
+  monitorIcon: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: AC.primary,
+    backgroundColor: AC.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
   monitorTitle: { fontSize: 14, fontWeight: '700', color: AC.textPrimary },
   monitorSub: { fontSize: 11, color: AC.textSecondary },
   liveTailBtn: {
-    backgroundColor: AC.primaryLight,
-    borderRadius: AR.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+    backgroundColor: AC.dangerLight,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: AR.chip,
   },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: AC.primary },
-  liveTailText: { fontSize: 11, fontWeight: '700', color: AC.primary, letterSpacing: 0.5 },
-  filterRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
-  filterTab: {
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: AC.danger },
+  liveTailText: { fontSize: 10, fontWeight: '800', color: AC.danger },
+  searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
+    backgroundColor: AC.bgCard,
+    borderRadius: AR.button,
     borderWidth: 1,
     borderColor: AC.border,
-    backgroundColor: AC.bgCard,
+    paddingHorizontal: 12,
+    height: 44,
+    gap: 8,
   },
-  filterTabActive: { borderColor: AC.textPrimary },
-  filterDot: { width: 6, height: 6, borderRadius: 3 },
+  searchIcon: { fontSize: 14 },
+  searchInput: { flex: 1, fontSize: 13, color: AC.textPrimary },
+  clearIcon: { fontSize: 13, color: AC.textTertiary, paddingHorizontal: 4 },
+  filterRow: { flexDirection: 'row', gap: 8 },
+  filterTab: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: AR.pill,
+    backgroundColor: AC.bgCard,
+    borderWidth: 1,
+    borderColor: AC.border,
+  },
+  filterTabActive: { backgroundColor: AC.primary, borderColor: AC.primary },
   filterText: { fontSize: 12, fontWeight: '600', color: AC.textSecondary },
-  filterTextActive: { color: AC.textPrimary, fontWeight: '700' },
-  showingText: { fontSize: 11, color: AC.textSecondary },
+  filterTextActive: { color: '#FFF', fontWeight: '700' },
+  statusPillsRow: { flexDirection: 'row', gap: 6 },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: AR.chip,
+    backgroundColor: AC.bgCard,
+    borderWidth: 1,
+    borderColor: AC.borderLight,
+  },
+  statusPillActive: { backgroundColor: AC.primaryLight, borderColor: AC.primaryMid },
+  statusPillText: { fontSize: 10, fontWeight: '700', color: AC.textTertiary },
+  statusPillTextActive: { color: AC.primary },
+  showingText: { fontSize: 12, color: AC.textSecondary, fontWeight: '500' },
+  alertsGap: { gap: 10 },
+  emptyCard: {
+    backgroundColor: AC.bgCard,
+    borderRadius: AR.card,
+    borderWidth: 1,
+    borderColor: AC.border,
+    padding: 28,
+    alignItems: 'center',
+    gap: 6,
+  },
+  emptyIcon: { fontSize: 32 },
+  emptyTitle: { fontSize: 15, fontWeight: '700', color: AC.textPrimary },
+  emptySub: { fontSize: 12, color: AC.textSecondary },
   cascadeCard: {
     backgroundColor: AC.bgCard,
     borderRadius: AR.card,
     borderWidth: 1,
     borderColor: AC.border,
-    padding: 12,
+    padding: AS.cardH,
     gap: 10,
   },
-  cascadeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  cascadeTitle: { fontSize: 14, fontWeight: '700', color: AC.textPrimary },
+  cascadeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cascadeTitle: { fontSize: 13, fontWeight: '700', color: AC.textPrimary },
   elevatedBadge: {
     backgroundColor: AC.warningLight,
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: AR.chip,
-    borderWidth: 1,
-    borderColor: '#FCD34D',
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  elevatedText: { fontSize: 10, fontWeight: '700', color: AC.warning, letterSpacing: 0.5 },
+  elevatedText: { fontSize: 10, fontWeight: '800', color: AC.warningText },
   nodeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   cascadeFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: AC.borderLight,
+    paddingTop: 8,
   },
-  autoFailRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  greenDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: AC.success },
+  autoFailRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  greenDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: AC.success },
   autoFailText: { fontSize: 11, color: AC.textSecondary },
-  heartbeatText: { fontSize: 11, color: AC.textSecondary, fontWeight: '600' },
-  btnSection: { gap: 8, marginTop: 4 },
+  heartbeatText: { fontSize: 11, color: AC.textTertiary },
+  btnSection: { gap: 8 },
   primaryBtn: {
     backgroundColor: AC.primary,
     borderRadius: AR.button,
-    paddingVertical: 14,
+    paddingVertical: 13,
     alignItems: 'center',
   },
-  primaryBtnAck: { backgroundColor: AC.success },
-  primaryBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
-  secondaryBtn: {
-    backgroundColor: AC.bgCard,
-    borderRadius: AR.button,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: AC.border,
-  },
-  secondaryBtnText: { color: AC.textPrimary, fontSize: 13, fontWeight: '600' },
+  primaryBtnText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
 });

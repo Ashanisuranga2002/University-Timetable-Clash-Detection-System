@@ -135,6 +135,76 @@ export default function AdminDashboard() {
           <OverallHealthCard />
         </View>
 
+        {/* Management Module Shortcuts */}
+        <View style={styles.section}>
+          <SectionHeader title="Management" right="Core Modules" />
+          <View style={styles.managementGrid}>
+            <Pressable
+              style={styles.mgmtCard}
+              onPress={() => router.push('/admin/users' as any)}
+              accessibilityRole="button"
+              accessibilityLabel="User Management"
+            >
+              <View style={[styles.mgmtIconWrap, { backgroundColor: '#EEF2FF' }]}>
+                <Text style={styles.mgmtIcon}>👥</Text>
+              </View>
+              <View style={styles.mgmtContent}>
+                <Text style={styles.mgmtTitle}>User Management</Text>
+                <Text style={styles.mgmtSub}>Manage system users and roles</Text>
+              </View>
+              <Text style={styles.mgmtArrow}>→</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.mgmtCard}
+              onPress={() => router.push('/admin/monitors' as any)}
+              accessibilityRole="button"
+              accessibilityLabel="Monitor Management"
+            >
+              <View style={[styles.mgmtIconWrap, { backgroundColor: '#F0FDF4' }]}>
+                <Text style={styles.mgmtIcon}>🖥️</Text>
+              </View>
+              <View style={styles.mgmtContent}>
+                <Text style={styles.mgmtTitle}>Monitor Management</Text>
+                <Text style={styles.mgmtSub}>Configure monitored services</Text>
+              </View>
+              <Text style={styles.mgmtArrow}>→</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.mgmtCard}
+              onPress={() => router.push('/admin/alerts')}
+              accessibilityRole="button"
+              accessibilityLabel="Alert Monitor"
+            >
+              <View style={[styles.mgmtIconWrap, { backgroundColor: '#FEF2F2' }]}>
+                <Text style={styles.mgmtIcon}>⚠️</Text>
+              </View>
+              <View style={styles.mgmtContent}>
+                <Text style={styles.mgmtTitle}>Alert Monitor</Text>
+                <Text style={styles.mgmtSub}>Review system alerts</Text>
+              </View>
+              <Text style={styles.mgmtArrow}>→</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.mgmtCard}
+              onPress={() => router.push('/admin/service-status')}
+              accessibilityRole="button"
+              accessibilityLabel="System Monitoring"
+            >
+              <View style={[styles.mgmtIconWrap, { backgroundColor: '#FFFBEB' }]}>
+                <Text style={styles.mgmtIcon}>📊</Text>
+              </View>
+              <View style={styles.mgmtContent}>
+                <Text style={styles.mgmtTitle}>System Monitoring</Text>
+                <Text style={styles.mgmtSub}>View current system health</Text>
+              </View>
+              <Text style={styles.mgmtArrow}>→</Text>
+            </Pressable>
+          </View>
+        </View>
+
         <View style={[styles.section, styles.metricsRow]}>
           <MetricCard
             label="LATENCY"
@@ -360,4 +430,50 @@ const styles = StyleSheet.create({
     borderColor: AC.border,
   },
   secondaryBtnText: { color: AC.textPrimary, fontSize: 14, fontWeight: '600' },
+  managementGrid: {
+    gap: 10,
+  },
+  mgmtCard: {
+    backgroundColor: AC.bgCard,
+    borderRadius: AR.card,
+    borderWidth: 1,
+    borderColor: AC.border,
+    padding: AS.cardH,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  mgmtIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mgmtIcon: {
+    fontSize: 20,
+  },
+  mgmtContent: {
+    flex: 1,
+    gap: 2,
+  },
+  mgmtTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: AC.textPrimary,
+  },
+  mgmtSub: {
+    fontSize: 12,
+    color: AC.textSecondary,
+  },
+  mgmtArrow: {
+    fontSize: 16,
+    color: AC.textTertiary,
+    fontWeight: '700',
+  },
 });

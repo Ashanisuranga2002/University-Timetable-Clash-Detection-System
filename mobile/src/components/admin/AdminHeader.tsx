@@ -3,25 +3,54 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AC, AS } from '@/constants/adminTheme';
 
+import { router } from 'expo-router';
+
 interface AdminHeaderProps {
   title: string;
   showCampus?: boolean;
+  showBack?: boolean;
+  onBack?: () => void;
   onNotification?: () => void;
   onProfile?: () => void;
 }
 
-export function AdminHeader({ title, showCampus = true, onNotification, onProfile }: AdminHeaderProps) {
+export function AdminHeader({
+  title,
+  showCampus = true,
+  showBack = false,
+  onBack,
+  onNotification,
+  onProfile,
+}: AdminHeaderProps) {
   const insets = useSafeAreaInsets();
+  const handleBack = () => {
+    if (onBack) onBack();
+    else router.back();
+  };
+
   return (
     <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
       <View style={styles.left}>
-        <Text style={styles.title}>{title}</Text>
-        {showCampus && (
-          <View style={styles.campusRow}>
-            <View style={styles.greenDot} />
-            <Text style={styles.campusText}>CAMPUS US-EAST</Text>
-          </View>
+        {showBack && (
+          <Pressable
+            onPress={handleBack}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Go Back"
+            hitSlop={8}
+          >
+            <Text style={styles.backArrow}>←</Text>
+          </Pressable>
         )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>{title}</Text>
+          {showCampus && (
+            <View style={styles.campusRow}>
+              <View style={styles.greenDot} />
+              <Text style={styles.campusText}>CAMPUS US-EAST</Text>
+            </View>
+          )}
+        </View>
       </View>
       <View style={styles.actions}>
         <Pressable
@@ -31,7 +60,7 @@ export function AdminHeader({ title, showCampus = true, onNotification, onProfil
           accessibilityLabel="Notifications"
           hitSlop={8}
         >
-          <Text style={styles.bellIcon}>??</Text>
+          <Text style={styles.bellIcon}>🔔</Text>
           <View style={styles.redDot} />
         </Pressable>
         <Pressable
@@ -59,9 +88,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: AC.border,
   },
-  left: { flex: 1 },
+  left: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  backBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: AC.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backArrow: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: AC.textPrimary,
+  },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: AC.textPrimary,
     letterSpacing: -0.3,

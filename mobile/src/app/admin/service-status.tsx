@@ -144,7 +144,7 @@ export default function ServiceStatusScreen() {
 
   return (
     <View style={styles.screen}>
-      <AdminHeader title="Service Status" />
+      <AdminHeader title="Service Status" showBack onBack={() => router.push('/admin')} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}

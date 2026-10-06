@@ -162,3 +162,149 @@ export function updateCourseApi(
     body: JSON.stringify(updates),
   });
 }
+
+// ─── Admin User Management APIs ────────────────────────────────────────────────
+
+export interface AdminUser {
+  _id?: string;
+  userId: string;
+  name: string;
+  email: string;
+  role: 'Student' | 'Academic Advisor' | 'Monitor' | 'Coordinator' | 'Administrator';
+  department: string;
+  status: 'Active' | 'Inactive' | 'Suspended';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export function fetchUsersApi(params?: { search?: string; role?: string; status?: string }) {
+  const query = new URLSearchParams();
+  if (params?.search) query.append('search', params.search);
+  if (params?.role && params.role !== 'All') query.append('role', params.role);
+  if (params?.status && params.status !== 'All') query.append('status', params.status);
+  const qStr = query.toString() ? `?${query.toString()}` : '';
+  return apiFetch(`/admin/users${qStr}`);
+}
+
+export function fetchUserByIdApi(id: string) {
+  return apiFetch(`/admin/users/${id}`);
+}
+
+export function createUserApi(userData: Partial<AdminUser>) {
+  return apiFetch('/admin/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(userData),
+  });
+}
+
+export function updateUserApi(id: string, userData: Partial<AdminUser>) {
+  return apiFetch(`/admin/users/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(userData),
+  });
+}
+
+export function deleteUserApi(id: string, deactivateOnly = false) {
+  const q = deactivateOnly ? '?deactivateOnly=true' : '';
+  return apiFetch(`/admin/users/${id}${q}`, {
+    method: 'DELETE',
+  });
+}
+
+// ─── Admin Monitor Management APIs ─────────────────────────────────────────────
+
+export interface AdminMonitor {
+  _id?: string;
+  monitorId: string;
+  serviceName: string;
+  serviceType: 'Service' | 'Database' | 'Gateway' | 'Queue' | 'Engine' | 'Worker';
+  description?: string;
+  endpoint?: string;
+  interval: string;
+  status: 'online' | 'warning' | 'offline';
+  healthStatus: 'Healthy' | 'Warning' | 'Critical' | 'Offline';
+  enabled: boolean;
+  responseTime?: string;
+  lastChecked?: string;
+  createdAt?: string;
+}
+
+export function fetchMonitorsApi() {
+  return apiFetch('/admin/monitors');
+}
+
+export function fetchMonitorByIdApi(id: string) {
+  return apiFetch(`/admin/monitors/${id}`);
+}
+
+export function createMonitorApi(monitorData: Partial<AdminMonitor>) {
+  return apiFetch('/admin/monitors', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(monitorData),
+  });
+}
+
+export function updateMonitorApi(id: string, monitorData: Partial<AdminMonitor>) {
+  return apiFetch(`/admin/monitors/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(monitorData),
+  });
+}
+
+export function deleteMonitorApi(id: string) {
+  return apiFetch(`/admin/monitors/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// ─── Admin Alert Management APIs ───────────────────────────────────────────────
+
+export interface AdminAlertItem {
+  _id?: string;
+  alertId: string;
+  title: string;
+  service: string;
+  worker?: string;
+  time?: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  state: 'new' | 'active' | 'acknowledged' | 'monitoring' | 'resolved';
+  metricLabel1?: string;
+  metricValue1?: string;
+  metricLabel2?: string;
+  metricValue2?: string;
+  impactNote?: string;
+  resolvedNote?: string;
+  ttr?: string;
+  createdAt?: string;
+}
+
+export function fetchAlertsApi(filter?: { status?: string; severity?: string }) {
+  const query = new URLSearchParams();
+  if (filter?.status && filter.status !== 'all') query.append('status', filter.status);
+  if (filter?.severity && filter.severity !== 'all') query.append('severity', filter.severity);
+  const qStr = query.toString() ? `?${query.toString()}` : '';
+  return apiFetch(`/admin/alerts${qStr}`);
+}
+
+export function fetchAlertByIdApi(id: string) {
+  return apiFetch(`/admin/alerts/${id}`);
+}
+
+export function updateAlertStatusApi(id: string, state: string, note?: string) {
+  return apiFetch(`/admin/alerts/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state, note }),
+  });
+}
+
+export function deleteAlertApi(id: string) {
+  return apiFetch(`/admin/alerts/${id}`, {
+    method: 'DELETE',
+  });
+}
+

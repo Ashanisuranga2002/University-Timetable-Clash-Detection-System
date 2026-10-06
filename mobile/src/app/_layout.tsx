@@ -13,9 +13,10 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
 
-      <Stack>
+      <Stack screenOptions={{ headerShown: false }}>
         {/* Unified login — handles students & admins */}
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="admin-login" options={{ headerShown: false }} />
 
         {/* Student screens */}
         <Stack.Screen name="dashboard" options={{ headerShown: false }} />
@@ -25,6 +26,7 @@ export default function RootLayout() {
 
         {/* Admin screen (reached from unified login) */}
         <Stack.Screen name="admin-dashboard" options={{ headerShown: false }} />
+        <Stack.Screen name="admin" options={{ headerShown: false }} />
       </Stack>
     </ThemeProvider>
   );

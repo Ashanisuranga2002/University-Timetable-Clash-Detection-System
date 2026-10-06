@@ -8,13 +8,14 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProgressBar } from '@/components/admin/ProgressBar';
 import { AC, AR, AS } from '@/constants/adminTheme';
 import { incidentDetail } from '@/constants/adminMonitoringData';
+import { updateAlertStatusApi, deleteAlertApi, fetchAlertByIdApi } from '@/services/api';
 
-type IncidentState = 'active' | 'resolved' | 'monitoring';
+type IncidentState = 'active' | 'resolved' | 'monitoring' | 'acknowledged';
 
 function TelemetryMetricCard({
   label,
@@ -107,20 +108,81 @@ const impStyles = StyleSheet.create({
 
 export default function IssueDetailsScreen() {
   const insets = useSafeAreaInsets();
+  const { alertId } = useLocalSearchParams<{ alertId: string }>();
   const [incidentState, setIncidentState] = useState<IncidentState>('active');
   const [monitoring, setMonitoring] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
 
-  const incident = incidentDetail;
+  const incident = {
+    ...incidentDetail,
+    id: alertId || incidentDetail.id,
+  };
   const isResolved = incidentState === 'resolved';
 
   function handleResolve() {
     setShowResolveModal(true);
   }
 
-  function confirmResolve() {
+  async function confirmResolve() {
     setShowResolveModal(false);
     setIncidentState('resolved');
+    if (alertId) {
+      try {
+        await updateAlertStatusApi(alertId, 'resolved', 'Resolved by Administrator');
+      } catch {
+        // local state already updated
+      }
+    }
+    Alert.alert('Incident Resolved', 'Incident marked as resolved.');
+  }
+
+  async function handleAcknowledge() {
+    setIncidentState('acknowledged');
+    if (alertId) {
+      try {
+        await updateAlertStatusApi(alertId, 'acknowledged');
+      } catch {
+        // local state updated
+      }
+    }
+    Alert.alert('Acknowledged', `Incident ${incident.id} marked as acknowledged.`);
+  }
+
+  async function handleReopen() {
+    setIncidentState('active');
+    if (alertId) {
+      try {
+        await updateAlertStatusApi(alertId, 'active');
+      } catch {
+        // local state updated
+      }
+    }
+    Alert.alert('Reopened', `Incident ${incident.id} reopened.`);
+  }
+
+  function handleDismiss() {
+    Alert.alert(
+      'Dismiss Incident',
+      `Are you sure you want to dismiss incident ${incident.id}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Dismiss',
+          style: 'destructive',
+          onPress: async () => {
+            if (alertId) {
+              try {
+                await deleteAlertApi(alertId);
+              } catch {
+                // local remove
+              }
+            }
+            Alert.alert('Dismissed', 'Incident dismissed.');
+            router.back();
+          },
+        },
+      ]
+    );
   }
 
   return (
@@ -292,19 +354,51 @@ export default function IssueDetailsScreen() {
         {/* Actions */}
         <View style={[styles.section, styles.btnSection]}>
           {!isResolved ? (
-            <Pressable
-              style={styles.resolveBtn}
-              onPress={handleResolve}
-              accessibilityRole="button"
-              accessibilityLabel="Mark as Resolved"
-            >
-              <Text style={styles.resolveBtnText}>Mark as Resolved</Text>
-            </Pressable>
+            <View style={{ gap: 8 }}>
+              <Pressable
+                style={styles.resolveBtn}
+                onPress={handleResolve}
+                accessibilityRole="button"
+                accessibilityLabel="Mark as Resolved"
+              >
+                <Text style={styles.resolveBtnText}>Mark as Resolved</Text>
+              </Pressable>
+
+              {incidentState !== 'acknowledged' && (
+                <Pressable
+                  style={[styles.resolveBtn, { backgroundColor: AC.warning }]}
+                  onPress={handleAcknowledge}
+                  accessibilityRole="button"
+                  accessibilityLabel="Acknowledge Alert"
+                >
+                  <Text style={styles.resolveBtnText}>Acknowledge Alert</Text>
+                </Pressable>
+              )}
+            </View>
           ) : (
-            <View style={styles.resolvedSuccessBtn}>
-              <Text style={styles.resolvedSuccessText}>Incident Resolved</Text>
+            <View style={{ gap: 8 }}>
+              <View style={styles.resolvedSuccessBtn}>
+                <Text style={styles.resolvedSuccessText}>Incident Resolved</Text>
+              </View>
+              <Pressable
+                style={[styles.resolveBtn, { backgroundColor: AC.primary }]}
+                onPress={handleReopen}
+                accessibilityRole="button"
+                accessibilityLabel="Reopen Incident"
+              >
+                <Text style={styles.resolveBtnText}>Reopen Incident</Text>
+              </Pressable>
             </View>
           )}
+
+          <Pressable
+            style={[styles.resolveBtn, { backgroundColor: AC.dangerLight, borderWidth: 1, borderColor: AC.danger }]}
+            onPress={handleDismiss}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss Incident"
+          >
+            <Text style={[styles.resolveBtnText, { color: AC.dangerText }]}>Dismiss / Delete Incident</Text>
+          </Pressable>
 
           <Pressable
             style={[styles.monitorBtn, monitoring ? styles.monitoringBtn : null]}

@@ -17,6 +17,18 @@ export default function AdminLayout() {
         <Stack.Screen name="system-health" />
         <Stack.Screen name="alerts" />
         <Stack.Screen name="issue-details" options={{ animation: 'slide_from_right' }} />
+
+        {/* User Management */}
+        <Stack.Screen name="users/index" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="users/add" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="users/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="users/edit/[id]" options={{ animation: 'slide_from_right' }} />
+
+        {/* Monitor Management */}
+        <Stack.Screen name="monitors/index" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="monitors/add" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="monitors/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="monitors/edit/[id]" options={{ animation: 'slide_from_right' }} />
       </Stack>
     </SafeAreaProvider>
   );

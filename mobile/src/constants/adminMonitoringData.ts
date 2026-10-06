@@ -5,7 +5,7 @@
 
 export type ServiceStatus = 'online' | 'warning' | 'offline';
 export type AlertSeverity = 'high' | 'medium' | 'low';
-export type AlertState = 'active' | 'monitoring' | 'resolved';
+export type AlertState = 'active' | 'monitoring' | 'resolved' | 'acknowledged';
 export type NodeState = 'healthy' | 'warning' | 'critical';
 
 export interface InfrastructureService {

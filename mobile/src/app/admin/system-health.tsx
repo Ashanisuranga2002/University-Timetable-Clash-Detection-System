@@ -19,7 +19,7 @@ export default function SystemHealthScreen() {
 
   return (
     <View style={styles.screen}>
-      <AdminHeader title="Service Status" />
+      <AdminHeader title="System Health" showBack onBack={() => router.push('/admin')} />
 
       {/* Health Banner */}
       <View style={styles.healthBanner}>

@@ -1422,7 +1422,7 @@ const styles = StyleSheet.create({
   },
   clashAlertTitle: {
     fontSize: 13.5,
-    fontWeight: '750',
+    fontWeight: '700',
     color: '#0F172A',
     marginBottom: 2,
   },
