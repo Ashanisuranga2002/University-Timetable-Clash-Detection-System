@@ -41,4 +41,6 @@ const registrationSchema = new mongoose.Schema(
     }
 );
 
+registrationSchema.index({ student: 1, semester: 1 });
+
 module.exports = mongoose.model("Registration", registrationSchema);

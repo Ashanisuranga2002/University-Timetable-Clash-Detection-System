@@ -9,7 +9,7 @@ const getStudentDashboard = async (req, res) => {
 
     const student = await Student.findOne({
       $or: [{ studentId }, { email: studentId.toLowerCase() }],
-    });
+    }).lean();
 
     if (!student) {
       return res.status(404).json({
@@ -18,28 +18,21 @@ const getStudentDashboard = async (req, res) => {
       });
     }
 
-    // Fetch registration for student's current semester
-    const registration = await Registration.findOne({
-      student: student._id,
-      semester: student.semester,
-    }).populate("courses");
-
-    const enrolledCourses = registration?.courses || [];
-    const totalCredits = enrolledCourses.reduce(
-      (sum, c) => sum + (c.credits || 0),
-      0
-    );
-    const maxCredits = 20;
-    const creditPercentage = Math.min(
-      Math.round((totalCredits / maxCredits) * 100),
-      100
-    );
-
-    // Active clashes
-    const activeClashes = await Clash.find({
-      student: student._id,
-      status: "active",
-    }).populate("course1 course2");
+    // Fetch registration and active clashes in parallel
+    const [registration, activeClashes] = await Promise.all([
+      Registration.findOne({
+        student: student._id,
+        semester: student.semester,
+      })
+        .populate("courses")
+        .lean(),
+      Clash.find({
+        student: student._id,
+        status: "active",
+      })
+        .populate("course1 course2")
+        .lean(),
+    ]);
 
     // Build schedule from enrolled courses
     const scheduleItems = [];
