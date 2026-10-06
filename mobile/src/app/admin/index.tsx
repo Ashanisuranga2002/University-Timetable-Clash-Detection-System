@@ -1,6 +1,6 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
-import { router } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { BottomAdminTabs } from '@/components/admin/BottomAdminTabs';
 import { ProgressBar } from '@/components/admin/ProgressBar';
@@ -15,26 +15,34 @@ import {
   telemetryData6h,
   systemAlerts,
 } from '@/constants/adminMonitoringData';
+import { fetchSystemHealthApi, SystemHealthData } from '@/services/api';
 
-function OverallHealthCard() {
+function OverallHealthCard({ health }: { health?: SystemHealthData | null }) {
+  const status = health?.overallStatus || systemHealth.status;
+  const isHealthy = status === 'Healthy';
+  const isWarning = status === 'Warning';
+  const statusColor = isHealthy ? AC.success : isWarning ? AC.warning : AC.danger;
+
   return (
     <View style={styles.healthCard}>
       <View style={styles.healthTop}>
         <View style={styles.healthLeft}>
           <Text style={styles.healthTitle}>
             {'Overall System Health: '}
-            <Text style={styles.healthyText}>{systemHealth.status}</Text>
+            <Text style={[styles.healthyText, { color: statusColor }]}>{status}</Text>
           </Text>
           <View style={styles.serverRow}>
             <Text style={styles.serverIcon}>{'🖥'}</Text>
-            <Text style={styles.serverText}>{systemHealth.server}</Text>
+            <Text style={styles.serverText}>{health?.server || systemHealth.server}</Text>
           </View>
         </View>
         <View style={styles.uptimeBadge}>
-          <Text style={styles.uptimeText}>{systemHealth.uptime}% UPTIME</Text>
+          <Text style={styles.uptimeText}>{health?.uptime || systemHealth.uptime}% UPTIME</Text>
         </View>
       </View>
-      <Text style={styles.updatedText}>Updated just now</Text>
+      <Text style={styles.updatedText}>
+        {health?.lastUpdated ? `Live Evaluated • ${new Date(health.lastUpdated).toLocaleTimeString()}` : 'Updated just now'}
+      </Text>
     </View>
   );
 }
@@ -121,6 +129,33 @@ function WarningCard({
 }
 
 export default function AdminDashboard() {
+  const [healthData, setHealthData] = useState<SystemHealthData | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadHealth = useCallback(async () => {
+    try {
+      const res = await fetchSystemHealthApi();
+      if (res && res.data) {
+        setHealthData(res.data);
+      }
+    } catch {
+      // Graceful fallback to static telemetry
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadHealth();
+    }, [loadHealth])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadHealth();
+  };
+
   const activeAlerts = systemAlerts.filter(a => a.state !== 'resolved');
 
   return (
@@ -130,9 +165,10 @@ export default function AdminDashboard() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.section}>
-          <OverallHealthCard />
+          <OverallHealthCard health={healthData} />
         </View>
 
         {/* Management Module Shortcuts */}
@@ -209,7 +245,7 @@ export default function AdminDashboard() {
           <MetricCard
             label="LATENCY"
             icon="⏱"
-            value={topMetrics.latency.value}
+            value={healthData?.averageResponseTime || topMetrics.latency.value}
             sub={topMetrics.latency.label}
             progress={topMetrics.latency.progress}
             progressColor={AC.success}
@@ -218,15 +254,15 @@ export default function AdminDashboard() {
             label="SYS LOAD"
             icon="😊"
             value={topMetrics.sysLoad.value}
-            sub={topMetrics.sysLoad.label}
+            sub={healthData ? `${healthData.onlineMonitors}/${healthData.totalMonitors} Online` : topMetrics.sysLoad.label}
             progress={topMetrics.sysLoad.progress}
             progressColor={AC.warning}
           />
           <MetricCard
             label="SESSIONS"
             icon="👥"
-            value={topMetrics.sessions.value}
-            sub={topMetrics.sessions.label}
+            value={healthData ? `${healthData.activeUsers}` : topMetrics.sessions.value}
+            sub={healthData ? `${healthData.totalUsers} Registered` : topMetrics.sessions.label}
             progress={topMetrics.sessions.progress}
             progressColor={AC.primary}
           />

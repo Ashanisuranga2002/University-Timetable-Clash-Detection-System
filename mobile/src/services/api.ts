@@ -308,3 +308,74 @@ export function deleteAlertApi(id: string) {
   });
 }
 
+export function acknowledgeAlertApi(id: string) {
+  return apiFetch(`/admin/alerts/${id}/acknowledge`, {
+    method: 'PATCH',
+  });
+}
+
+export function resolveAlertApi(id: string, note?: string) {
+  return apiFetch(`/admin/alerts/${id}/resolve`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note }),
+  });
+}
+
+export function reopenAlertApi(id: string) {
+  return apiFetch(`/admin/alerts/${id}/reopen`, {
+    method: 'PATCH',
+  });
+}
+
+export function patchUserStatusApi(id: string, status: string) {
+  return apiFetch(`/admin/users/${id}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function patchMonitorStatusApi(id: string, updates: { status?: string; healthStatus?: string; enabled?: boolean }) {
+  return apiFetch(`/admin/monitors/${id}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+}
+
+// ─── Admin System Health API ───────────────────────────────────────────────────
+
+export interface SystemHealthData {
+  overallStatus: 'Healthy' | 'Warning' | 'Critical';
+  server: string;
+  campus: string;
+  uptime: number;
+  nodesSync: number;
+  latencyMs: number;
+  averageResponseTime: string;
+  totalUsers: number;
+  activeUsers: number;
+  totalMonitors: number;
+  onlineMonitors: number;
+  warningMonitors: number;
+  criticalMonitors: number;
+  activeAlerts: number;
+  services: Array<{
+    id: string;
+    name: string;
+    subtitle: string;
+    latency: string;
+    availability: string;
+    status: 'online' | 'warning' | 'offline';
+    note?: string;
+    pod?: string;
+  }>;
+  lastUpdated: string;
+}
+
+export function fetchSystemHealthApi(): Promise<{ success: boolean; data: SystemHealthData }> {
+  return apiFetch('/admin/system-health');
+}
+
+

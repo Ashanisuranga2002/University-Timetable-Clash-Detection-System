@@ -26,6 +26,9 @@ import {
   deleteAlertApi,
   fetchAlertsApi,
   updateAlertStatusApi,
+  acknowledgeAlertApi,
+  resolveAlertApi,
+  reopenAlertApi,
 } from '@/services/api';
 
 type FilterKey = 'all' | AlertSeverity;

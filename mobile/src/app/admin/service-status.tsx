@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,16 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { BottomAdminTabs } from '@/components/admin/BottomAdminTabs';
 import { StatusBadge } from '@/components/admin/StatusBadge';
 import { SectionHeader } from '@/components/admin/SectionHeader';
 import { AC, AR, AS } from '@/constants/adminTheme';
 import { coreServices, InfrastructureService } from '@/constants/adminMonitoringData';
+import { fetchSystemHealthApi } from '@/services/api';
 
 function OverallStatusCard({ onRefresh }: { onRefresh: () => void }) {
   return (
@@ -138,8 +140,31 @@ function ServiceCard({ svc }: { svc: InfrastructureService }) {
 }
 
 export default function ServiceStatusScreen() {
+  const [services, setServices] = useState<InfrastructureService[]>(coreServices);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadServices = useCallback(async () => {
+    try {
+      const res = await fetchSystemHealthApi();
+      if (res && res.data && res.data.services && res.data.services.length > 0) {
+        setServices(res.data.services as any);
+      }
+    } catch {
+      // Fallback to coreServices
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadServices();
+    }, [loadServices])
+  );
+
   function handleRefresh() {
-    Alert.alert('Refreshed', 'Service status updated.');
+    setRefreshing(true);
+    loadServices();
   }
 
   return (
@@ -149,15 +174,19 @@ export default function ServiceStatusScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
         <View style={styles.section}>
           <OverallStatusCard onRefresh={handleRefresh} />
         </View>
 
         <View style={styles.section}>
-          <SectionHeader title="Core Infrastructure Matrix" right="4 Instances Monitored" />
+          <SectionHeader
+            title="Core Infrastructure Matrix"
+            right={`${services.length} Instances Monitored`}
+          />
           <View style={styles.gap}>
-            {coreServices.map(svc => (
+            {services.map(svc => (
               <ServiceCard key={svc.id} svc={svc} />
             ))}
           </View>

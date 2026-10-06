@@ -151,3 +151,60 @@ exports.deleteAlert = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// PATCH /api/admin/alerts/:id/acknowledge
+exports.acknowledgeAlert = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const alert = await Alert.findOne({
+      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { alertId: id }],
+    });
+    if (!alert) {
+      return res.status(404).json({ success: false, message: "Alert not found" });
+    }
+    alert.state = "acknowledged";
+    await alert.save();
+    return res.status(200).json({ success: true, data: alert, message: "Alert acknowledged" });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// PATCH /api/admin/alerts/:id/resolve
+exports.resolveAlert = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { note } = req.body;
+    const alert = await Alert.findOne({
+      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { alertId: id }],
+    });
+    if (!alert) {
+      return res.status(404).json({ success: false, message: "Alert not found" });
+    }
+    alert.state = "resolved";
+    if (note) alert.resolvedNote = note;
+    alert.ttr = "Completed";
+    await alert.save();
+    return res.status(200).json({ success: true, data: alert, message: "Alert resolved" });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// PATCH /api/admin/alerts/:id/reopen
+exports.reopenAlert = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const alert = await Alert.findOne({
+      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { alertId: id }],
+    });
+    if (!alert) {
+      return res.status(404).json({ success: false, message: "Alert not found" });
+    }
+    alert.state = "active";
+    await alert.save();
+    return res.status(200).json({ success: true, data: alert, message: "Alert reopened" });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

@@ -11,7 +11,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { AC, AR, AS } from '@/constants/adminTheme';
-import { AdminUser, deleteUserApi, fetchUserByIdApi } from '@/services/api';
+import { AdminUser, deleteUserApi, fetchUserByIdApi, patchUserStatusApi } from '@/services/api';
 
 export default function UserDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -43,20 +43,24 @@ export default function UserDetailsScreen() {
 
   const handleDelete = () => {
     if (!user) return;
+    const isCurrentlyActive = user.status === 'Active';
+    const actionLabel = isCurrentlyActive ? 'Deactivate' : 'Activate';
+    const newStatus = isCurrentlyActive ? 'Inactive' : 'Active';
+
     Alert.alert(
       'User Management Action',
       `Choose an action for ${user.name}:`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Deactivate',
+          text: actionLabel,
           onPress: async () => {
             try {
-              await deleteUserApi(user._id || user.userId, true);
-              Alert.alert('Success', 'User status set to Inactive.');
+              await patchUserStatusApi(user._id || user.userId, newStatus);
+              Alert.alert('Success', `User status set to ${newStatus}.`);
               loadUser();
             } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to deactivate user');
+              Alert.alert('Error', err.message || `Failed to ${actionLabel.toLowerCase()} user`);
             }
           },
         },

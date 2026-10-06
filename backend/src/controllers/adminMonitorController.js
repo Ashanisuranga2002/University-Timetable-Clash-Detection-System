@@ -169,3 +169,28 @@ exports.deleteMonitor = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// PATCH /api/admin/monitors/:id/status
+exports.updateMonitorStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, healthStatus, enabled } = req.body;
+
+    const monitor = await Monitor.findOne({
+      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { monitorId: id }],
+    });
+    if (!monitor) {
+      return res.status(404).json({ success: false, message: "Monitor not found" });
+    }
+
+    if (status) monitor.status = status;
+    if (healthStatus) monitor.healthStatus = healthStatus;
+    if (enabled !== undefined) monitor.enabled = enabled;
+    monitor.lastChecked = new Date();
+
+    await monitor.save();
+    return res.status(200).json({ success: true, data: monitor, message: "Monitor status updated successfully" });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

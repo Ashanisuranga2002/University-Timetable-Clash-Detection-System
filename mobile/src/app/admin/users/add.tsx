@@ -30,6 +30,7 @@ export default function AddUserScreen() {
   const [userId, setUserId] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState<AdminUser['role']>('Student');
   const [department, setDepartment] = useState('Faculty of Computing');
   const [status, setStatus] = useState<AdminUser['status']>('Active');
@@ -59,6 +60,10 @@ export default function AddUserScreen() {
       }
     }
 
+    if (password && password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+
     if (!department.trim()) {
       newErrors.department = 'Department is required';
     }
@@ -76,10 +81,11 @@ export default function AddUserScreen() {
         userId: userId.trim().toUpperCase(),
         name: name.trim(),
         email: email.trim().toLowerCase(),
+        password: password.trim() || undefined,
         role,
         department: department.trim(),
         status,
-      });
+      } as any);
 
       Alert.alert('Success', `User ${name} has been added successfully!`, [
         {
@@ -165,6 +171,24 @@ export default function AddUserScreen() {
                 autoCapitalize="none"
               />
               {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+            </View>
+
+            {/* Temporary Password */}
+            <View style={styles.field}>
+              <Text style={styles.label}>INITIAL / TEMPORARY PASSWORD</Text>
+              <TextInput
+                style={[styles.input, errors.password ? styles.inputError : null]}
+                placeholder="Optional (Default: Temp@123, min 6 chars)"
+                placeholderTextColor={AC.textTertiary}
+                value={password}
+                onChangeText={(t) => {
+                  setPassword(t);
+                  if (errors.password) setErrors((prev) => ({ ...prev, password: '' }));
+                }}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+              {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
             </View>
 
             {/* Department */}

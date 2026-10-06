@@ -6,6 +6,7 @@ router.get("/", monitorController.getMonitors);
 router.get("/:id", monitorController.getMonitorById);
 router.post("/", monitorController.createMonitor);
 router.put("/:id", monitorController.updateMonitor);
+router.patch("/:id/status", monitorController.updateMonitorStatus);
 router.delete("/:id", monitorController.deleteMonitor);
 
 module.exports = router;
