@@ -1,0 +1,31 @@
+{
+  "name": "university-timetable-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "REST API for the University Timetable Clash Detection System",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "check": "node scripts/check-js.js",
+    "seed": "node src/seed/seed.js",
+    "test": "node --test src/tests/*.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "3.0.3",
+    "cors": "2.8.6",
+    "dotenv": "18.0.5",
+    "exceljs": "^4.4.0",
+    "express": "5.2.1",
+    "jsonwebtoken": "9.0.3",
+    "mongoose": "9.11.0",
+    "multer": "^2.4.0"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  },
+  "type": "module"
+}

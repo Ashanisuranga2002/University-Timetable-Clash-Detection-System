@@ -1,0 +1,12 @@
+import { Router } from 'express';
+import { batchResolveErrors, deleteError, getError, listErrors, resolveError, updateError } from '../controllers/errorController.js';
+import { authenticate, requireCoordinator } from '../middleware/authMiddleware.js';
+const router = Router();
+router.use(authenticate, requireCoordinator);
+router.put('/batch-resolve', batchResolveErrors);
+router.get('/', listErrors);
+router.put('/:id/resolve', resolveError);
+router.get('/:id', getError);
+router.put('/:id', updateError);
+router.delete('/:id', deleteError);
+export default router;

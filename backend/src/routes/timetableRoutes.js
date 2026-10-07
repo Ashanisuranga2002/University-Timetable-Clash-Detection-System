@@ -1,0 +1,15 @@
+import { Router } from 'express';
+import { createTimetable, deleteTimetable, getTimetable, getTimetableSessions, listTimetables, updateTimetable } from '../controllers/timetableController.js';
+import { authenticate, requireCoordinator } from '../middleware/authMiddleware.js';
+import { uploadTimetableFile } from '../controllers/fileUploadController.js';
+import { uploadSpreadsheet } from '../middleware/uploadMiddleware.js';
+const router = Router();
+router.use(authenticate, requireCoordinator);
+router.post('/upload', uploadSpreadsheet, uploadTimetableFile);
+router.post('/', createTimetable);
+router.get('/', listTimetables);
+router.get('/:id/sessions', getTimetableSessions);
+router.get('/:id', getTimetable);
+router.put('/:id', updateTimetable);
+router.delete('/:id', deleteTimetable);
+export default router;

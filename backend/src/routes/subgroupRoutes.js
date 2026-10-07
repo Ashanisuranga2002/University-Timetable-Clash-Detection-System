@@ -1,0 +1,15 @@
+import { Router } from 'express';
+import { bulkCreateSubgroups, createSubgroup, deleteSubgroup, getSubgroup, listSubgroups, updateSubgroup } from '../controllers/subgroupController.js';
+import { authenticate, requireCoordinator } from '../middleware/authMiddleware.js';
+import { uploadSubgroupFile } from '../controllers/fileUploadController.js';
+import { uploadSpreadsheet } from '../middleware/uploadMiddleware.js';
+const router = Router();
+router.use(authenticate, requireCoordinator);
+router.post('/upload', uploadSpreadsheet, uploadSubgroupFile);
+router.post('/bulk', bulkCreateSubgroups);
+router.post('/', createSubgroup);
+router.get('/', listSubgroups);
+router.get('/:id', getSubgroup);
+router.put('/:id', updateSubgroup);
+router.delete('/:id', deleteSubgroup);
+export default router;
