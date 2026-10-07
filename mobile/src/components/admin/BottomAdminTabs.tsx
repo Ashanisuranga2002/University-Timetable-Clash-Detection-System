@@ -1,27 +1,30 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { router, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AC } from '@/constants/adminTheme';
+import { fetchAlertsApi } from '@/services/api';
 
 interface Tab {
   name: string;
   label: string;
   route: string;
   icon: string;
-  badge?: number;
 }
 
 const TABS: Tab[] = [
   { name: 'dashboard', label: 'Dashboard', route: '/admin', icon: '📊' },
   { name: 'monitor', label: 'Monitor', route: '/admin/service-status', icon: '🖥' },
-  { name: 'alerts', label: 'Alerts', route: '/admin/alerts', icon: '⚠️', badge: 2 },
-  { name: 'profile', label: 'Profile', route: '/', icon: '🛡' },
+  { name: 'alerts', label: 'Alerts', route: '/admin/alerts', icon: '⚠️' },
+  { name: 'profile', label: 'Profile', route: '/admin/profile', icon: '👤' },
 ];
 
 function matchesTab(pathname: string, tab: Tab): boolean {
   if (tab.route === '/admin') {
     return pathname === '/admin' || pathname === '/admin/index';
+  }
+  if (tab.route === '/admin/profile') {
+    return pathname === '/admin/profile';
   }
   return pathname.startsWith(tab.route);
 }
@@ -29,11 +32,34 @@ function matchesTab(pathname: string, tab: Tab): boolean {
 export function BottomAdminTabs() {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  const [activeAlertsCount, setActiveAlertsCount] = useState<number>(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadAlertsCount() {
+      try {
+        const res = await fetchAlertsApi({ status: 'active' });
+        if (res && res.data && Array.isArray(res.data) && isMounted) {
+          // Count only active alerts
+          const activeOnly = res.data.filter((a: any) => a.state === 'active' || a.state === 'new');
+          setActiveAlertsCount(activeOnly.length);
+        }
+      } catch {
+        if (isMounted) setActiveAlertsCount(0);
+      }
+    }
+    loadAlertsCount();
+    return () => {
+      isMounted = false;
+    };
+  }, [pathname]);
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {TABS.map(tab => {
         const active = matchesTab(pathname, tab);
+        const badgeCount = tab.name === 'alerts' ? activeAlertsCount : 0;
+
         return (
           <Pressable
             key={tab.name}
@@ -46,9 +72,9 @@ export function BottomAdminTabs() {
           >
             <View style={[styles.iconWrap, active && styles.iconWrapActive]}>
               <Text style={styles.icon}>{tab.icon}</Text>
-              {tab.badge && !active ? (
+              {badgeCount > 0 && !active ? (
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{tab.badge}</Text>
+                  <Text style={styles.badgeText}>{badgeCount}</Text>
                 </View>
               ) : null}
             </View>

@@ -5,11 +5,13 @@ const {
   updateCourse,
   deleteCourse,
   getAdminDashboard,
+  getAdminDashboardStats,
   getAllCoursesAdmin,
 } = require("../controllers/adminController");
 
 // Admin dashboard stats
 router.get("/dashboard", getAdminDashboard);
+router.get("/dashboard/stats", getAdminDashboardStats);
 
 // Course management
 router.get("/courses", getAllCoursesAdmin);

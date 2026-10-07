@@ -9,6 +9,7 @@ import {
   Alert,
   RefreshControl,
   Switch,
+  Modal,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { AdminHeader } from '@/components/admin/AdminHeader';
@@ -27,6 +28,8 @@ export default function MonitorsListScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [monitorToDelete, setMonitorToDelete] = useState<AdminMonitor | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [filter, setFilter] = useState<string>('All');
 
@@ -77,26 +80,22 @@ export default function MonitorsListScreen() {
   };
 
   const handleDelete = (monitor: AdminMonitor) => {
-    Alert.alert(
-      'Remove Monitor',
-      `Are you sure you want to delete monitor "${monitor.serviceName}"? Telemetry metrics for this service will stop tracking.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteMonitorApi(monitor._id || monitor.monitorId);
-              Alert.alert('Success', 'Monitor removed successfully.');
-              loadMonitors();
-            } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to delete monitor');
-            }
-          },
-        },
-      ]
-    );
+    setMonitorToDelete(monitor);
+  };
+
+  const confirmDeleteMonitor = async () => {
+    if (!monitorToDelete) return;
+    try {
+      setDeleting(true);
+      await deleteMonitorApi(monitorToDelete._id || monitorToDelete.monitorId);
+      setMonitorToDelete(null);
+      await loadMonitors();
+      Alert.alert('Success', 'Monitor removed successfully.');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to delete monitor');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const getHealthBadge = (health: string) => {
@@ -282,11 +281,78 @@ export default function MonitorsListScreen() {
 
         <View style={{ height: 24 }} />
       </ScrollView>
+
+      {/* Delete Monitor Modal */}
+      <Modal
+        visible={!!monitorToDelete}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMonitorToDelete(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Remove Service Monitor?</Text>
+            <Text style={styles.modalDesc}>
+              Are you sure you want to delete monitor "{monitorToDelete?.serviceName}"? Telemetry metrics for this service will stop tracking.
+            </Text>
+            <View style={styles.modalActionCol}>
+              <Pressable
+                style={[styles.modalActionBtn, { backgroundColor: AC.danger }]}
+                disabled={deleting}
+                onPress={confirmDeleteMonitor}
+              >
+                <Text style={styles.modalBtnText}>Delete Monitor</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.modalCancelBtn}
+                disabled={deleting}
+                onPress={() => setMonitorToDelete(null)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalBox: {
+    backgroundColor: AC.bgCard,
+    borderRadius: AR.card,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    gap: 12,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: AC.textPrimary },
+  modalDesc: { fontSize: 13, color: AC.textSecondary, lineHeight: 18 },
+  modalActionCol: { gap: 10, marginTop: 8 },
+  modalActionBtn: {
+    paddingVertical: 12,
+    borderRadius: AR.button,
+    alignItems: 'center',
+  },
+  modalBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  modalCancelBtn: {
+    borderWidth: 1,
+    borderColor: AC.border,
+    paddingVertical: 12,
+    borderRadius: AR.button,
+    alignItems: 'center',
+    backgroundColor: AC.bgApp,
+  },
+  modalCancelText: { color: AC.textSecondary, fontSize: 14, fontWeight: '600' },
   screen: { flex: 1, backgroundColor: AC.bgApp },
   scroll: { flex: 1 },
   content: { padding: AS.screenH, gap: 14 },

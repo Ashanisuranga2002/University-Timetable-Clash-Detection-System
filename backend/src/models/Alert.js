@@ -43,6 +43,15 @@ const alertSchema = new mongoose.Schema(
     impactNote: { type: String, default: "" },
     resolvedNote: { type: String, default: "" },
     ttr: { type: String, default: "" },
+    monitorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Monitor",
+      default: null,
+    },
+    acknowledgedAt: { type: Date, default: null },
+    resolvedAt: { type: Date, default: null },
+    acknowledgedBy: { type: String, default: "" },
+    resolvedBy: { type: String, default: "" },
   },
   {
     timestamps: true,

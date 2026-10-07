@@ -106,12 +106,11 @@ export default function EditMonitorScreen() {
         enabled,
       });
 
-      Alert.alert('Saved', 'Monitor configuration updated successfully!', [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]);
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.push('/admin/monitors');
+      }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to update monitor configuration');
     } finally {
@@ -121,7 +120,7 @@ export default function EditMonitorScreen() {
 
   return (
     <View style={styles.screen}>
-      <AdminHeader title="Edit Monitor" showBack onBack={() => router.back()} />
+      <AdminHeader title="Edit Monitor" showBack onBack={() => (router.canGoBack() ? router.back() : router.push('/admin/monitors'))} />
 
       {initialLoading ? (
         <View style={styles.centerBox}>
@@ -272,7 +271,7 @@ export default function EditMonitorScreen() {
             <View style={styles.actionRow}>
               <Pressable
                 style={styles.cancelBtn}
-                onPress={() => router.back()}
+                onPress={() => (router.canGoBack() ? router.back() : router.push('/admin/monitors'))}
                 disabled={submitting}
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { AdminHeader } from '@/components/admin/AdminHeader';
@@ -27,6 +28,8 @@ export default function UsersListScreen() {
   const [search, setSearch] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('All');
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
+  const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadUsers = useCallback(async () => {
     try {
@@ -61,38 +64,37 @@ export default function UsersListScreen() {
   };
 
   const handleDelete = (user: AdminUser) => {
-    Alert.alert(
-      'Delete or Deactivate User',
-      `Choose an action for ${user.name} (${user.userId}):`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Deactivate',
-          onPress: async () => {
-            try {
-              await deleteUserApi(user._id || user.userId, true);
-              Alert.alert('Success', 'User has been deactivated.');
-              loadUsers();
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to deactivate user');
-            }
-          },
-        },
-        {
-          text: 'Permanent Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteUserApi(user._id || user.userId, false);
-              Alert.alert('Success', 'User permanently deleted.');
-              loadUsers();
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to delete user');
-            }
-          },
-        },
-      ]
-    );
+    setUserToDelete(user);
+  };
+
+  const confirmDeactivate = async () => {
+    if (!userToDelete) return;
+    try {
+      setDeleting(true);
+      await deleteUserApi(userToDelete._id || userToDelete.userId, true);
+      setUserToDelete(null);
+      await loadUsers();
+      Alert.alert('Success', 'User has been deactivated.');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to deactivate user');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const confirmPermanentDelete = async () => {
+    if (!userToDelete) return;
+    try {
+      setDeleting(true);
+      await deleteUserApi(userToDelete._id || userToDelete.userId, false);
+      setUserToDelete(null);
+      await loadUsers();
+      Alert.alert('Success', 'User permanently deleted.');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to delete user');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const getRoleBadgeStyle = (role: string) => {
@@ -294,11 +296,86 @@ export default function UsersListScreen() {
 
         <View style={{ height: 24 }} />
       </ScrollView>
+
+      {/* Confirmation Modal */}
+      <Modal
+        visible={!!userToDelete}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setUserToDelete(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Manage User Account</Text>
+            <Text style={styles.modalDesc}>
+              Choose an action for {userToDelete?.name} ({userToDelete?.userId}):
+            </Text>
+            <View style={styles.modalActionCol}>
+              <Pressable
+                style={[styles.modalActionBtn, { backgroundColor: AC.warning }]}
+                disabled={deleting}
+                onPress={confirmDeactivate}
+              >
+                <Text style={styles.modalBtnText}>Deactivate Account</Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.modalActionBtn, { backgroundColor: AC.danger }]}
+                disabled={deleting}
+                onPress={confirmPermanentDelete}
+              >
+                <Text style={styles.modalBtnText}>Permanently Delete User</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.modalCancelBtn}
+                disabled={deleting}
+                onPress={() => setUserToDelete(null)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalBox: {
+    backgroundColor: AC.bgCard,
+    borderRadius: AR.card,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    gap: 12,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: AC.textPrimary },
+  modalDesc: { fontSize: 13, color: AC.textSecondary, lineHeight: 18 },
+  modalActionCol: { gap: 10, marginTop: 8 },
+  modalActionBtn: {
+    paddingVertical: 12,
+    borderRadius: AR.button,
+    alignItems: 'center',
+  },
+  modalBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  modalCancelBtn: {
+    borderWidth: 1,
+    borderColor: AC.border,
+    paddingVertical: 12,
+    borderRadius: AR.button,
+    alignItems: 'center',
+    backgroundColor: AC.bgApp,
+  },
+  modalCancelText: { color: AC.textSecondary, fontSize: 14, fontWeight: '600' },
   screen: { flex: 1, backgroundColor: AC.bgApp },
   scroll: { flex: 1 },
   content: { padding: AS.screenH, gap: 12 },

@@ -13,6 +13,7 @@ export default function AdminLayout() {
         }}
       >
         <Stack.Screen name="index" />
+        <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="service-status" />
         <Stack.Screen name="system-health" />
         <Stack.Screen name="alerts" />

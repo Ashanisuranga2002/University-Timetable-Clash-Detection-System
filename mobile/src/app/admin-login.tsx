@@ -113,11 +113,14 @@ export default function AdminLoginScreen() {
       const adminRes = await loginAdminApi(id, password);
       if (adminRes?.success) {
         await saveOrClearCredentials(id, password);
+        if (adminRes.admin) {
+          await AsyncStorage.setItem('current_admin_user', JSON.stringify(adminRes.admin));
+        }
         router.replace({
           pathname: '/admin',
           params: {
             adminId: adminRes.admin?.adminId || id,
-            adminName: adminRes.admin?.name || 'Dr. Sarah Mitchell',
+            adminName: adminRes.admin?.name || 'Administrator',
             adminRole: adminRes.admin?.role || 'Administrator',
             adminDept: adminRes.admin?.department || 'Academic Affairs',
           },

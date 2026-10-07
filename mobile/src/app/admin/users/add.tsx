@@ -87,12 +87,11 @@ export default function AddUserScreen() {
         status,
       } as any);
 
-      Alert.alert('Success', `User ${name} has been added successfully!`, [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]);
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.push('/admin/users');
+      }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to create user. Please check if ID/email is duplicate.');
     } finally {
@@ -102,7 +101,7 @@ export default function AddUserScreen() {
 
   return (
     <View style={styles.screen}>
-      <AdminHeader title="Add New User" showBack onBack={() => router.back()} />
+      <AdminHeader title="Add New User" showBack onBack={() => (router.canGoBack() ? router.back() : router.push('/admin/users'))} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -256,7 +255,7 @@ export default function AddUserScreen() {
           <View style={styles.actionRow}>
             <Pressable
               style={styles.cancelBtn}
-              onPress={() => router.back()}
+              onPress={() => (router.canGoBack() ? router.back() : router.push('/admin/users'))}
               disabled={loading}
             >
               <Text style={styles.cancelBtnText}>Cancel</Text>

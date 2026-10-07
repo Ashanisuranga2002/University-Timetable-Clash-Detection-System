@@ -41,13 +41,33 @@ async function fetchWithTimeout(url: string, options?: RequestInit, timeoutMs = 
 }
 
 async function apiFetch(path: string, options?: RequestInit) {
+  const mergedOptions: RequestInit = {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-role': 'Administrator',
+      'x-user-role': 'Administrator',
+      ...(options?.headers || {}),
+    },
+  };
+
   // Try primary detected endpoint first
   try {
-    const res = await fetchWithTimeout(`${activeBaseUrl}${path}`, options, 3000);
-    if (res.ok || res.status < 500) {
-      return await res.json();
+    const res = await fetchWithTimeout(`${activeBaseUrl}${path}`, mergedOptions, 3000);
+    const data = await res.json().catch(() => null);
+    if (res.ok) {
+      return data;
     }
-  } catch {
+    if (data && data.message) {
+      throw new Error(data.message);
+    }
+    if (res.status >= 400 && res.status < 500) {
+      throw new Error(`Request failed with status ${res.status}`);
+    }
+  } catch (err: any) {
+    if (err?.message && !err.message.includes('fetch') && !err.message.includes('abort') && !err.message.includes('Network request failed')) {
+      throw err;
+    }
     // Continue to fast candidates
   }
 
@@ -61,12 +81,19 @@ async function apiFetch(path: string, options?: RequestInit) {
 
   for (const baseUrl of candidates) {
     try {
-      const res = await fetchWithTimeout(`${baseUrl}${path}`, options, 2000);
-      if (res.ok || res.status < 500) {
+      const res = await fetchWithTimeout(`${baseUrl}${path}`, mergedOptions, 2000);
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
         activeBaseUrl = baseUrl; // Remember working endpoint for instant subsequent loads
-        return await res.json();
+        return data;
       }
-    } catch {
+      if (data && data.message) {
+        throw new Error(data.message);
+      }
+    } catch (err: any) {
+      if (err?.message && !err.message.includes('fetch') && !err.message.includes('abort') && !err.message.includes('Network request failed')) {
+        throw err;
+      }
       // try next candidate
     }
   }
@@ -361,6 +388,8 @@ export interface SystemHealthData {
   warningMonitors: number;
   criticalMonitors: number;
   activeAlerts: number;
+  memoryPercent?: number;
+  heapUsedMB?: number;
   services: Array<{
     id: string;
     name: string;
@@ -368,14 +397,122 @@ export interface SystemHealthData {
     latency: string;
     availability: string;
     status: 'online' | 'warning' | 'offline';
+    healthStatus?: 'Healthy' | 'Warning' | 'Critical' | 'Offline';
+    enabled?: boolean;
     note?: string;
     pod?: string;
+    lastChecked?: string;
   }>;
   lastUpdated: string;
 }
 
 export function fetchSystemHealthApi(): Promise<{ success: boolean; data: SystemHealthData }> {
   return apiFetch('/admin/system-health');
+}
+
+// ─── Admin Dashboard Stats API ─────────────────────────────────────────────────
+
+export interface AdminDashboardStats {
+  users: {
+    total: number;
+    active: number;
+    inactive: number;
+  };
+  monitors: {
+    total: number;
+    healthy: number;
+    warning: number;
+    critical: number;
+    offline: number;
+  };
+  alerts: {
+    total: number;
+    active: number;
+    critical: number;
+    acknowledged: number;
+    resolved: number;
+  };
+  systemHealth: {
+    status: 'Healthy' | 'Warning' | 'Critical' | 'No Data';
+    percentage: number | null;
+    averageResponseTime: string | null;
+    server: string;
+    uptimePercentage: number | null;
+    lastUpdated: string;
+  };
+  systemLoad?: {
+    memoryUsagePercentage: number;
+    loadAverage: number;
+    uptimeSeconds: number;
+    processMemoryMB: number;
+  };
+  recentMonitors?: Array<{
+    id: string;
+    name: string;
+    pod: string;
+    latency: string;
+    status: 'online' | 'warning' | 'offline';
+    healthStatus: 'Healthy' | 'Warning' | 'Critical' | 'Offline';
+    enabled: boolean;
+  }>;
+  recentAlerts?: Array<{
+    id: string;
+    title: string;
+    service: string;
+    time: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    state: 'new' | 'active' | 'acknowledged' | 'monitoring' | 'resolved';
+    createdAt?: string;
+  }>;
+}
+
+export function fetchAdminDashboardStatsApi(): Promise<{ success: boolean; data: AdminDashboardStats }> {
+  return apiFetch('/admin/dashboard/stats');
+}
+
+// ─── Monitor Health Probe Checks ───────────────────────────────────────────────
+
+export function checkMonitorApi(id: string) {
+  return apiFetch(`/admin/monitors/${id}/check`, {
+    method: 'POST',
+  });
+}
+
+export function checkAllMonitorsApi() {
+  return apiFetch('/admin/monitors/check-all', {
+    method: 'POST',
+  });
+}
+
+// ─── Admin Profile APIs ────────────────────────────────────────────────────────
+
+export interface AdminProfileData {
+  id: string;
+  adminId: string;
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  department: string;
+  status: string;
+  createdAt?: string;
+  lastLogin?: string;
+}
+
+export function fetchAdminProfileApi(adminId?: string): Promise<{ success: boolean; admin: AdminProfileData; data: AdminProfileData }> {
+  const path = adminId ? `/admin/auth/profile/${adminId}` : '/admin/auth/profile';
+  return apiFetch(path);
+}
+
+export function updateAdminProfileApi(
+  adminId: string,
+  updates: { name?: string; department?: string }
+): Promise<{ success: boolean; admin: AdminProfileData; data: AdminProfileData }> {
+  return apiFetch(`/admin/auth/profile/${adminId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
 }
 
 

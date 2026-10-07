@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,22 @@ import {
   Pressable,
   Alert,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProgressBar } from '@/components/admin/ProgressBar';
 import { AC, AR, AS } from '@/constants/adminTheme';
-import { incidentDetail } from '@/constants/adminMonitoringData';
-import { updateAlertStatusApi, deleteAlertApi, fetchAlertByIdApi } from '@/services/api';
+import {
+  updateAlertStatusApi,
+  deleteAlertApi,
+  fetchAlertByIdApi,
+  acknowledgeAlertApi,
+  resolveAlertApi,
+  reopenAlertApi,
+  fetchAdminDashboardStatsApi,
+  AdminDashboardStats,
+} from '@/services/api';
 
 type IncidentState = 'active' | 'resolved' | 'monitoring' | 'acknowledged';
 
@@ -109,14 +118,46 @@ const impStyles = StyleSheet.create({
 export default function IssueDetailsScreen() {
   const insets = useSafeAreaInsets();
   const { alertId } = useLocalSearchParams<{ alertId: string }>();
+
+  const [loading, setLoading] = useState(true);
+  const [alertData, setAlertData] = useState<any>(null);
   const [incidentState, setIncidentState] = useState<IncidentState>('active');
   const [monitoring, setMonitoring] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
+  const [showDismissModal, setShowDismissModal] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
+  const [dashboardStats, setDashboardStats] = useState<AdminDashboardStats | null>(null);
 
-  const incident = {
-    ...incidentDetail,
-    id: alertId || incidentDetail.id,
-  };
+  const loadDetails = useCallback(async () => {
+    if (!alertId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const [alertRes, statsRes] = await Promise.all([
+        fetchAlertByIdApi(alertId),
+        fetchAdminDashboardStatsApi().catch(() => null),
+      ]);
+
+      if (alertRes && alertRes.data) {
+        setAlertData(alertRes.data);
+        setIncidentState(alertRes.data.state || 'active');
+      }
+      if (statsRes && statsRes.data) {
+        setDashboardStats(statsRes.data);
+      }
+    } catch {
+      // Alert could not be loaded
+    } finally {
+      setLoading(false);
+    }
+  }, [alertId]);
+
+  useEffect(() => {
+    loadDetails();
+  }, [loadDetails]);
+
   const isResolved = incidentState === 'resolved';
 
   function handleResolve() {
@@ -128,75 +169,153 @@ export default function IssueDetailsScreen() {
     setIncidentState('resolved');
     if (alertId) {
       try {
-        await updateAlertStatusApi(alertId, 'resolved', 'Resolved by Administrator');
-      } catch {
-        // local state already updated
+        await resolveAlertApi(alertId, 'Resolved by Administrator');
+        Alert.alert('Incident Resolved', 'Incident marked as resolved in database.');
+      } catch (err: any) {
+        Alert.alert('Error', err.message || 'Failed to update alert in database.');
       }
     }
-    Alert.alert('Incident Resolved', 'Incident marked as resolved.');
   }
 
   async function handleAcknowledge() {
     setIncidentState('acknowledged');
     if (alertId) {
       try {
-        await updateAlertStatusApi(alertId, 'acknowledged');
-      } catch {
-        // local state updated
+        await acknowledgeAlertApi(alertId);
+        Alert.alert('Acknowledged', `Incident ${alertId} marked as acknowledged in database.`);
+      } catch (err: any) {
+        Alert.alert('Error', err.message || 'Failed to acknowledge alert.');
       }
     }
-    Alert.alert('Acknowledged', `Incident ${incident.id} marked as acknowledged.`);
   }
 
   async function handleReopen() {
     setIncidentState('active');
     if (alertId) {
       try {
-        await updateAlertStatusApi(alertId, 'active');
-      } catch {
-        // local state updated
+        await reopenAlertApi(alertId);
+        Alert.alert('Reopened', `Incident ${alertId} reopened in database.`);
+      } catch (err: any) {
+        Alert.alert('Error', err.message || 'Failed to reopen alert.');
       }
     }
-    Alert.alert('Reopened', `Incident ${incident.id} reopened.`);
   }
 
   function handleDismiss() {
-    Alert.alert(
-      'Dismiss Incident',
-      `Are you sure you want to dismiss incident ${incident.id}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Dismiss',
-          style: 'destructive',
-          onPress: async () => {
-            if (alertId) {
-              try {
-                await deleteAlertApi(alertId);
-              } catch {
-                // local remove
-              }
-            }
-            Alert.alert('Dismissed', 'Incident dismissed.');
-            router.back();
-          },
-        },
-      ]
+    setShowDismissModal(true);
+  }
+
+  async function confirmDismiss() {
+    if (!alertId) return;
+    try {
+      setDismissing(true);
+      await deleteAlertApi(alertId);
+      setShowDismissModal(false);
+      Alert.alert('Dismissed', 'Incident dismissed from database.');
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.push('/admin/alerts' as any);
+      }
+    } catch (err: any) {
+      if (err?.message?.toLowerCase().includes('not found') || err?.message?.includes('404')) {
+        setShowDismissModal(false);
+        Alert.alert('Dismissed', 'Incident is already removed.');
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.push('/admin/alerts' as any);
+        }
+      } else {
+        Alert.alert('Error', err.message || 'Failed to delete alert.');
+      }
+    } finally {
+      setDismissing(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <View style={[styles.screen, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={AC.primary} />
+        <Text style={{ marginTop: 12, color: AC.textSecondary }}>Loading real incident record...</Text>
+      </View>
     );
   }
+
+  // Derive real values from database alert
+  const idDisplay = alertData?.alertId || alertData?._id || alertId || 'UNKNOWN';
+  const titleDisplay = alertData?.title || 'System Incident';
+  const serviceDisplay = alertData?.service || alertData?.monitorId?.serviceName || 'Core Infrastructure';
+  const workerDisplay = alertData?.worker || 'Operational Node';
+  const severityDisplay = (alertData?.severity || 'HIGH').toUpperCase();
+  const detectedAtDisplay = alertData?.createdAt
+    ? new Date(alertData.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+    : alertData?.time || 'Live Record';
+
+  const clusterStatus = isResolved
+    ? 'RESOLVED'
+    : severityDisplay === 'CRITICAL' || severityDisplay === 'HIGH'
+    ? 'FAILING'
+    : 'DEGRADED';
+
+  // Real telemetry values
+  const respTimeVal = dashboardStats?.systemHealth?.averageResponseTime || '--';
+  const sysLoadVal = dashboardStats?.systemLoad
+    ? `${dashboardStats.systemLoad.memoryUsagePercentage}`
+    : '--';
+  const sysLoadProgress = dashboardStats?.systemLoad
+    ? Math.min(1, dashboardStats.systemLoad.memoryUsagePercentage / 100)
+    : 0.5;
+  const activeUsersVal = dashboardStats?.users
+    ? `${dashboardStats.users.active}`
+    : '--';
+  const activeUsersProgress = dashboardStats?.users && dashboardStats.users.total > 0
+    ? Math.min(1, dashboardStats.users.active / dashboardStats.users.total)
+    : 0.5;
+
+  const impactsList = [
+    {
+      id: 'impact-1',
+      title: 'Service Incident Impact',
+      desc: alertData?.impactNote || `${serviceDisplay} reported ${severityDisplay} severity disruption.`,
+      color: '#EF4444',
+      bgColor: '#FFF1F2',
+    },
+    ...(alertData?.metricLabel1
+      ? [
+          {
+            id: 'impact-2',
+            title: alertData.metricLabel1,
+            desc: `Observed Metric: ${alertData.metricValue1 || 'Threshold exceeded'}`,
+            color: '#F43F5E',
+            bgColor: '#FFF1F2',
+          },
+        ]
+      : []),
+    {
+      id: 'impact-3',
+      title: 'Database Telemetry Audit',
+      desc: alertData?.resolvedNote
+        ? `Resolution Note: ${alertData.resolvedNote}`
+        : 'Registered in monitoring ledger with live administrative tracking.',
+      color: '#F59E0B',
+      bgColor: '#FFFBEB',
+    },
+  ];
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.push('/admin/alerts' as any))}
           style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Back"
           hitSlop={8}
         >
-          <Text style={styles.backArrow}>Back</Text>
+          <Text style={styles.backArrow}>←</Text>
           <Text style={styles.backText}>Issue Details</Text>
         </Pressable>
         <View style={styles.profileBtn}>
@@ -212,12 +331,15 @@ export default function IssueDetailsScreen() {
         {/* Nav breadcrumb */}
         <View style={styles.section}>
           <View style={styles.navRow}>
-            <Pressable onPress={() => router.back()} accessibilityRole="button">
-              <Text style={styles.backNavText}>Back to System Alerts</Text>
+            <Pressable
+              onPress={() => (router.canGoBack() ? router.back() : router.push('/admin/alerts' as any))}
+              accessibilityRole="button"
+            >
+              <Text style={styles.backNavText}>← Back to System Alerts</Text>
             </Pressable>
             <View style={styles.navRight}>
               <View style={styles.alertIdBadge}>
-                <Text style={styles.alertIdText}>{incident.id}</Text>
+                <Text style={styles.alertIdText}>{idDisplay}</Text>
               </View>
               <View style={styles.liveIncidentBadge}>
                 <View style={styles.liveDot} />
@@ -233,7 +355,7 @@ export default function IssueDetailsScreen() {
             <View style={styles.incidentTopRow}>
               <View style={[styles.severityBadge, isResolved ? styles.resolvedBadge : null]}>
                 <Text style={[styles.severityText, isResolved ? { color: AC.success } : null]}>
-                  {isResolved ? 'RESOLVED' : 'HIGH SEVERITY'}
+                  {isResolved ? 'RESOLVED' : `${severityDisplay} SEVERITY`}
                 </Text>
               </View>
               <View style={[styles.stateBadge, isResolved ? styles.stateResolvedBadge : null]}>
@@ -246,13 +368,13 @@ export default function IssueDetailsScreen() {
                 <Text
                   style={[styles.stateText, isResolved ? { color: AC.success } : null]}
                 >
-                  {isResolved ? 'Resolved' : incident.state}
+                  {isResolved ? 'Resolved' : incidentState.toUpperCase()}
                 </Text>
               </View>
             </View>
-            <Text style={styles.incidentTitle}>{incident.title}</Text>
+            <Text style={styles.incidentTitle}>{titleDisplay}</Text>
             <Text style={styles.detectedText}>
-              {incident.detectedAt} ({incident.ago})
+              Detected: {detectedAtDisplay}
             </Text>
             <View style={styles.clusterCard}>
               <View style={styles.clusterIcon}>
@@ -260,8 +382,8 @@ export default function IssueDetailsScreen() {
               </View>
               <View style={styles.clusterInfo}>
                 <Text style={styles.clusterLabel}>AFFECTED NODE CLUSTER</Text>
-                <Text style={styles.clusterName}>{incident.affectedCluster}</Text>
-                <Text style={styles.clusterSub}>{incident.clusterSub}</Text>
+                <Text style={styles.clusterName}>{serviceDisplay}</Text>
+                <Text style={styles.clusterSub}>{workerDisplay}</Text>
               </View>
               <View
                 style={[
@@ -275,14 +397,14 @@ export default function IssueDetailsScreen() {
                     isResolved ? { color: AC.success } : null,
                   ]}
                 >
-                  {isResolved ? 'RESOLVED' : incident.clusterStatus}
+                  {clusterStatus}
                 </Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* Real-Time Telemetry */}
+        {/* Real-Time Telemetry from Live Backend */}
         <View style={styles.section}>
           <View style={styles.telemetryHeader}>
             <Text style={styles.telemetryLabel}>REAL-TIME OCCURRENCE TELEMETRY</Text>
@@ -294,26 +416,24 @@ export default function IssueDetailsScreen() {
           <View style={styles.metricsRow}>
             <TelemetryMetricCard
               label="RESP. TIME"
-              value="2.8"
-              unit="s"
-              sub="Base 1.5s"
-              progress={incident.respTime.progress}
+              value={respTimeVal}
+              sub="Measured Avg"
+              progress={respTimeVal !== '--' ? 0.6 : 0.1}
               color={AC.danger}
             />
             <TelemetryMetricCard
               label="SYS LOAD"
-              value="88"
+              value={sysLoadVal}
               unit="%"
-              sub="Norm 75%"
-              progress={incident.sysLoad.progress}
+              sub="Memory telemetry"
+              progress={sysLoadProgress}
               color={AC.warning}
             />
             <TelemetryMetricCard
               label="ACTIVE USERS"
-              value="2.35"
-              unit="k"
-              sub="Peak Surge"
-              progress={incident.activeUsers.progress}
+              value={activeUsersVal}
+              sub="Active accounts"
+              progress={activeUsersProgress}
               color={AC.primary}
             />
           </View>
@@ -323,8 +443,14 @@ export default function IssueDetailsScreen() {
         <View style={styles.section}>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>INCIDENT SUMMARY</Text>
-            <Text style={styles.summaryText}>{incident.summary}</Text>
-            <Text style={styles.automatedText}>{incident.automatedAction}</Text>
+            <Text style={styles.summaryText}>
+              {alertData?.impactNote || alertData?.description || `${titleDisplay} recorded in database for ${serviceDisplay}.`}
+            </Text>
+            <Text style={styles.automatedText}>
+              {alertData?.resolvedNote
+                ? `Resolution: ${alertData.resolvedNote}`
+                : 'Automated monitoring probe captured this event directly from the database.'}
+            </Text>
           </View>
         </View>
 
@@ -334,11 +460,11 @@ export default function IssueDetailsScreen() {
             <View style={styles.impactHeader}>
               <Text style={styles.impactTitle}>SYSTEM IMPACT BREAKDOWN</Text>
               <View style={styles.vectorsBadge}>
-                <Text style={styles.vectorsText}>3 vectors</Text>
+                <Text style={styles.vectorsText}>{impactsList.length} vectors</Text>
               </View>
             </View>
             <View style={styles.impactList}>
-              {incident.impacts.map(impact => (
+              {impactsList.map(impact => (
                 <ImpactItem
                   key={impact.id}
                   title={impact.title}
@@ -378,7 +504,7 @@ export default function IssueDetailsScreen() {
           ) : (
             <View style={{ gap: 8 }}>
               <View style={styles.resolvedSuccessBtn}>
-                <Text style={styles.resolvedSuccessText}>Incident Resolved</Text>
+                <Text style={styles.resolvedSuccessText}>✓ Incident Resolved</Text>
               </View>
               <Pressable
                 style={[styles.resolveBtn, { backgroundColor: AC.primary }]}
@@ -415,7 +541,7 @@ export default function IssueDetailsScreen() {
             onPress={() => router.push('/admin/service-status')}
             accessibilityRole="link"
           >
-            <Text style={styles.linkText}>View Clash Service Status and Server Logs</Text>
+            <Text style={styles.linkText}>View Service Status and Probes →</Text>
           </Pressable>
         </View>
 
@@ -432,7 +558,7 @@ export default function IssueDetailsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>Mark as Resolved?</Text>
-            <Text style={styles.modalDesc}>Mark this incident as resolved?</Text>
+            <Text style={styles.modalDesc}>Confirm marking this incident as resolved in database?</Text>
             <View style={styles.modalActions}>
               <Pressable
                 style={styles.modalCancel}
@@ -442,6 +568,39 @@ export default function IssueDetailsScreen() {
               </Pressable>
               <Pressable style={styles.modalConfirm} onPress={confirmResolve}>
                 <Text style={styles.modalConfirmText}>Confirm</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Dismiss / Delete Modal */}
+      <Modal
+        visible={showDismissModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDismissModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Dismiss Incident?</Text>
+            <Text style={styles.modalDesc}>
+              Are you sure you want to permanently delete incident {idDisplay} from database?
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.modalCancel}
+                disabled={dismissing}
+                onPress={() => setShowDismissModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalConfirm, { backgroundColor: AC.danger }]}
+                disabled={dismissing}
+                onPress={confirmDismiss}
+              >
+                <Text style={styles.modalConfirmText}>Dismiss</Text>
               </Pressable>
             </View>
           </View>
@@ -467,7 +626,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  backArrow: { fontSize: 14, color: AC.primary, fontWeight: '600' },
+  backArrow: { fontSize: 18, color: AC.primary, fontWeight: '700' },
   backText: { fontSize: 18, fontWeight: '700', color: AC.textPrimary },
   profileBtn: {
     width: 34,

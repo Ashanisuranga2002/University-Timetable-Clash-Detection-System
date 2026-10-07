@@ -1,3 +1,4 @@
+const os = require("os");
 const User = require("../models/User");
 const Monitor = require("../models/Monitor");
 const Alert = require("../models/Alert");
@@ -24,7 +25,7 @@ exports.getSystemHealth = async (req, res) => {
       overallStatus = "Warning";
     }
 
-    // Average latency
+    // Average latency from real monitors
     let totalLatency = 0;
     let latencyCount = 0;
     monitors.forEach((m) => {
@@ -34,26 +35,35 @@ exports.getSystemHealth = async (req, res) => {
         latencyCount++;
       }
     });
-    const avgLatency = latencyCount > 0 ? (totalLatency / latencyCount).toFixed(1) + "s" : "1.2s";
+    const avgLatency = latencyCount > 0 ? (totalLatency / latencyCount).toFixed(2) + "s" : "--";
 
     const mappedServices = monitors.map((m) => ({
       id: m.monitorId || m._id,
       name: m.serviceName,
       subtitle: m.serviceType,
-      latency: m.responseTime || "1.0s",
-      availability: m.status === "online" ? "99.98%" : "98.40%",
+      latency: m.responseTime || "--",
+      availability: m.status === "online" ? "99.98%" : m.status === "warning" ? "98.40%" : "0.00%",
       status: m.status,
+      healthStatus: m.healthStatus,
+      enabled: m.enabled,
       note: m.description,
       pod: `${m.serviceType} • ${m.interval}`,
+      lastChecked: m.lastChecked,
     }));
+
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const memoryPercent = Math.round(((totalMem - freeMem) / totalMem) * 100);
+    const heapUsedMB = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+    const uptimePct = totalMonitors > 0 ? Number(((onlineMonitors / totalMonitors) * 100).toFixed(1)) : 100;
 
     const responseData = {
       overallStatus,
-      server: "AU-CAMPUS-CORE-01",
-      campus: "CAMPUS US-EAST",
-      uptime: 99.98,
-      nodesSync: 32,
-      latencyMs: 8,
+      server: os.hostname() || "AU-CAMPUS-CORE-01",
+      campus: "CAMPUS MAIN",
+      uptime: uptimePct,
+      nodesSync: totalMonitors,
+      latencyMs: latencyCount > 0 ? Math.round((totalLatency / latencyCount) * 1000) : 0,
       averageResponseTime: avgLatency,
       totalUsers,
       activeUsers,
@@ -62,6 +72,8 @@ exports.getSystemHealth = async (req, res) => {
       warningMonitors,
       criticalMonitors,
       activeAlerts: activeAlertsCount,
+      memoryPercent,
+      heapUsedMB,
       services: mappedServices,
       lastUpdated: new Date().toISOString(),
     };

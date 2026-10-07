@@ -168,12 +168,15 @@ export default function LoginScreen() {
 
         if (adminRes?.success) {
           await saveOrClearCredentials(id, password);
+          if (adminRes.admin) {
+            await AsyncStorage.setItem('current_admin_user', JSON.stringify(adminRes.admin));
+          }
 
           router.replace({
             pathname: '/admin',
             params: {
               adminId: adminRes.admin?.adminId || id,
-              adminName: adminRes.admin?.name || 'Dr. Sarah Mitchell',
+              adminName: adminRes.admin?.name || 'Administrator',
               adminRole: adminRes.admin?.role || 'Administrator',
               adminDept: adminRes.admin?.department || 'Academic Affairs',
             },
@@ -802,114 +805,6 @@ export default function LoginScreen() {
             </Text>
           </View>
 
-          {/* ============================================= */}
-          {/* MEMBER 4 ADMIN SYSTEM MONITORING */}
-          {/* ============================================= */}
-
-          <Pressable
-            style={({
-              pressed,
-            }) => [
-              styles.adminLauncherCard,
-
-              pressed &&
-                styles.adminLauncherCardPressed,
-            ]}
-            onPress={
-              handleAdminPortal
-            }
-            accessibilityRole="button"
-            accessibilityLabel="Open Admin Monitoring System"
-          >
-            {/* ADMIN BADGE */}
-
-            <View
-              style={
-                styles.adminBadgeRow
-              }
-            >
-              <View
-                style={
-                  styles.adminLiveDot
-                }
-              />
-
-              <Text
-                style={
-                  styles.adminBadgeText
-                }
-              >
-                HCI PROJECT • ADMIN
-                AREA
-              </Text>
-            </View>
-
-            {/* ADMIN TITLE */}
-
-            <View
-              style={
-                styles.adminTitleRow
-              }
-            >
-              <View
-                style={
-                  styles.adminIcon
-                }
-              >
-                <Ionicons
-                  name="pulse-outline"
-                  size={20}
-                  color={INDIGO}
-                />
-              </View>
-
-              <Text
-                style={
-                  styles.adminLauncherTitle
-                }
-              >
-                System Monitoring &
-                Health
-              </Text>
-            </View>
-
-            {/* DESCRIPTION */}
-
-            <Text
-              style={
-                styles.adminLauncherDesc
-              }
-            >
-              Access real-time
-              telemetry, service
-              status, incident
-              monitoring, system
-              alerts and issue
-              triage.
-            </Text>
-
-            {/* ADMIN BUTTON */}
-
-            <View
-              style={
-                styles.adminLaunchButton
-              }
-            >
-              <Text
-                style={
-                  styles.adminLaunchButtonText
-                }
-              >
-                Launch Admin Portal
-              </Text>
-
-              <Ionicons
-                name="arrow-forward"
-                size={15}
-                color="#FFFFFF"
-              />
-            </View>
-          </Pressable>
 
           {/* ============================================= */}
           {/* BOTTOM HELP */}

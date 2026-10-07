@@ -101,12 +101,11 @@ export default function EditUserScreen() {
         status,
       });
 
-      Alert.alert('Updated', 'User profile updated successfully!', [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]);
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.push('/admin/users');
+      }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to update user profile');
     } finally {
@@ -116,7 +115,7 @@ export default function EditUserScreen() {
 
   return (
     <View style={styles.screen}>
-      <AdminHeader title="Edit User" showBack onBack={() => router.back()} />
+      <AdminHeader title="Edit User" showBack onBack={() => (router.canGoBack() ? router.back() : router.push('/admin/users'))} />
 
       {initialLoading ? (
         <View style={styles.centerBox}>
@@ -243,7 +242,7 @@ export default function EditUserScreen() {
             <View style={styles.actionRow}>
               <Pressable
                 style={styles.cancelBtn}
-                onPress={() => router.back()}
+                onPress={() => (router.canGoBack() ? router.back() : router.push('/admin/users'))}
                 disabled={submitting}
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>

@@ -9,6 +9,7 @@ import {
   TextInput,
   RefreshControl,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { AdminHeader } from '@/components/admin/AdminHeader';
@@ -16,20 +17,40 @@ import { BottomAdminTabs } from '@/components/admin/BottomAdminTabs';
 import { StatusBadge } from '@/components/admin/StatusBadge';
 import { AC, AR, AS } from '@/constants/adminTheme';
 import {
-  systemAlerts,
-  MonitoringAlert,
-  AlertSeverity,
-  regionalNodes,
-  RegionalNode,
-} from '@/constants/adminMonitoringData';
-import {
   deleteAlertApi,
   fetchAlertsApi,
-  updateAlertStatusApi,
   acknowledgeAlertApi,
   resolveAlertApi,
   reopenAlertApi,
+  fetchMonitorsApi,
 } from '@/services/api';
+
+export type AlertSeverity = 'high' | 'medium' | 'low';
+export type AlertState = 'active' | 'monitoring' | 'resolved' | 'acknowledged';
+
+export interface MonitoringAlert {
+  id: string;
+  title: string;
+  service: string;
+  worker: string;
+  time: string;
+  severity: AlertSeverity;
+  state: AlertState;
+  metricLabel1?: string;
+  metricValue1?: string;
+  metricLabel2?: string;
+  metricValue2?: string;
+  impactNote?: string;
+  resolvedNote?: string;
+  ttr?: string;
+  createdAt?: string;
+}
+
+export interface MonitorNode {
+  id: string;
+  label: string;
+  state: 'healthy' | 'warning' | 'critical';
+}
 
 type FilterKey = 'all' | AlertSeverity;
 type StateFilterKey = 'all' | 'active' | 'acknowledged' | 'resolved';
@@ -50,7 +71,7 @@ const sparkStyles = StyleSheet.create({
   bar: { width: 4, borderRadius: 2 },
 });
 
-function NodePill({ node }: { node: RegionalNode }) {
+function NodePill({ node }: { node: MonitorNode }) {
   const bg =
     node.state === 'healthy'
       ? AC.successLight
@@ -309,9 +330,12 @@ const aStyles = StyleSheet.create({
 });
 
 export default function AlertsScreen() {
-  const [alerts, setAlerts] = useState<MonitoringAlert[]>(systemAlerts);
-  const [loading, setLoading] = useState(false);
+  const [alerts, setAlerts] = useState<MonitoringAlert[]>([]);
+  const [nodes, setNodes] = useState<MonitorNode[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [alertToDismiss, setAlertToDismiss] = useState<string | null>(null);
+  const [dismissing, setDismissing] = useState(false);
 
   const [severityFilter, setSeverityFilter] = useState<FilterKey>('all');
   const [stateFilter, setStateFilter] = useState<StateFilterKey>('all');
@@ -319,29 +343,63 @@ export default function AlertsScreen() {
 
   const loadAlerts = useCallback(async () => {
     try {
-      const res = await fetchAlertsApi();
-      if (res && res.data && res.data.length > 0) {
-        // Map backend alerts to MonitoringAlert interface
-        const mapped: MonitoringAlert[] = res.data.map((item: any) => ({
-          id: item.alertId || item._id,
-          title: item.title,
-          service: item.service,
-          worker: item.worker || 'Worker 01',
-          time: item.time || 'Active',
-          severity: (item.severity === 'critical' ? 'high' : item.severity) as AlertSeverity,
-          state: item.state as any,
-          metricLabel1: item.metricLabel1 || undefined,
-          metricValue1: item.metricValue1 || undefined,
-          metricLabel2: item.metricLabel2 || undefined,
-          metricValue2: item.metricValue2 || undefined,
-          impactNote: item.impactNote || undefined,
-          resolvedNote: item.resolvedNote || undefined,
-          ttr: item.ttr || undefined,
-        }));
+      const [alertRes, monitorRes] = await Promise.all([
+        fetchAlertsApi(),
+        fetchMonitorsApi().catch(() => ({ success: false, data: [] })),
+      ]);
+
+      if (alertRes && alertRes.data) {
+        const mapped: MonitoringAlert[] = alertRes.data.map((item: any) => {
+          const createdAtDate = item.createdAt ? new Date(item.createdAt) : null;
+          const timeFormatted = createdAtDate
+            ? createdAtDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : (item.time || 'Live');
+
+          return {
+            id: item.alertId || item._id,
+            title: item.title,
+            service: item.service || (item.monitorId?.serviceName ? item.monitorId.serviceName : 'System Service'),
+            worker: item.worker || 'Node Worker 01',
+            time: timeFormatted,
+            severity: (item.severity === 'critical' ? 'high' : item.severity) as AlertSeverity,
+            state: (item.state || 'active') as AlertState,
+            metricLabel1: item.metricLabel1 || (item.status ? 'STATE' : undefined),
+            metricValue1: item.metricValue1 || (item.severity ? item.severity.toUpperCase() : undefined),
+            metricLabel2: item.metricLabel2 || undefined,
+            metricValue2: item.metricValue2 || undefined,
+            impactNote: item.impactNote || undefined,
+            resolvedNote: item.resolvedNote || undefined,
+            ttr: item.ttr || undefined,
+            createdAt: item.createdAt,
+          };
+        });
         setAlerts(mapped);
+      } else {
+        setAlerts([]);
+      }
+
+      if (monitorRes && monitorRes.data && Array.isArray(monitorRes.data)) {
+        const liveNodes: MonitorNode[] = monitorRes.data.map((m: any, idx: number) => {
+          const h = (m.healthStatus || 'Healthy').toLowerCase();
+          const stateVal: 'healthy' | 'warning' | 'critical' =
+            !m.enabled || h === 'critical' || h === 'offline'
+              ? 'critical'
+              : h === 'warning'
+              ? 'warning'
+              : 'healthy';
+          const shortCode = m.serviceName
+            ? m.serviceName.split(' ').map((w: string) => w[0]).join('').slice(0, 4).toUpperCase()
+            : `N0${idx + 1}`;
+          return {
+            id: m.monitorId || m._id || `node-${idx}`,
+            label: shortCode,
+            state: stateVal,
+          };
+        });
+        setNodes(liveNodes);
       }
     } catch {
-      // Fallback to local default alerts
+      setAlerts([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -361,21 +419,19 @@ export default function AlertsScreen() {
 
   const handleAcknowledgeAlert = async (alertId: string) => {
     try {
-      await updateAlertStatusApi(alertId, 'acknowledged');
+      await acknowledgeAlertApi(alertId);
       setAlerts(prev =>
-        prev.map(a => (a.id === alertId ? { ...a, state: 'acknowledged' as any } : a))
+        prev.map(a => (a.id === alertId ? { ...a, state: 'acknowledged' as AlertState } : a))
       );
-      Alert.alert('Acknowledged', `Incident ${alertId} has been acknowledged.`);
-    } catch {
-      setAlerts(prev =>
-        prev.map(a => (a.id === alertId ? { ...a, state: 'acknowledged' as any } : a))
-      );
+      Alert.alert('Acknowledged', `Incident ${alertId} has been acknowledged in database.`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to acknowledge alert.');
     }
   };
 
   const handleResolveAlert = async (alertId: string) => {
     try {
-      await updateAlertStatusApi(alertId, 'resolved', 'Resolved by Administrator');
+      await resolveAlertApi(alertId, 'Resolved by Administrator');
       setAlerts(prev =>
         prev.map(a =>
           a.id === alertId
@@ -383,65 +439,70 @@ export default function AlertsScreen() {
             : a
         )
       );
-      Alert.alert('Resolved', `Incident ${alertId} marked as resolved.`);
-    } catch {
-      setAlerts(prev =>
-        prev.map(a =>
-          a.id === alertId
-            ? { ...a, state: 'resolved', resolvedNote: 'Resolved by Administrator' }
-            : a
-        )
-      );
+      Alert.alert('Resolved', `Incident ${alertId} marked as resolved in database.`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to resolve alert.');
     }
   };
 
   const handleReopenAlert = async (alertId: string) => {
     try {
-      await updateAlertStatusApi(alertId, 'active');
+      await reopenAlertApi(alertId);
       setAlerts(prev =>
         prev.map(a => (a.id === alertId ? { ...a, state: 'active' } : a))
       );
-      Alert.alert('Reopened', `Incident ${alertId} has been reopened.`);
-    } catch {
-      setAlerts(prev =>
-        prev.map(a => (a.id === alertId ? { ...a, state: 'active' } : a))
-      );
+      Alert.alert('Reopened', `Incident ${alertId} reopened in database.`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to reopen alert.');
     }
   };
 
   const handleDismissAlert = (alertId: string) => {
-    Alert.alert(
-      'Dismiss Alert',
-      `Are you sure you want to dismiss incident ${alertId}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Dismiss',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteAlertApi(alertId);
-            } catch {
-              // local remove
-            }
-            setAlerts(prev => prev.filter(a => a.id !== alertId));
-            Alert.alert('Dismissed', `Alert ${alertId} has been removed.`);
-          },
-        },
-      ]
-    );
+    setAlertToDismiss(alertId);
   };
 
-  const handleAcknowledgeAll = () => {
-    Alert.alert('Acknowledge All Alerts?', 'Mark all active alerts as acknowledged?', [
+  const confirmDismissAlert = async () => {
+    if (!alertToDismiss) return;
+    try {
+      setDismissing(true);
+      await deleteAlertApi(alertToDismiss);
+      setAlerts(prev => prev.filter(a => a.id !== alertToDismiss));
+      setAlertToDismiss(null);
+      Alert.alert('Dismissed', `Alert ${alertToDismiss} has been deleted from database.`);
+    } catch (err: any) {
+      if (err?.message?.toLowerCase().includes('not found') || err?.message?.includes('404')) {
+        setAlerts(prev => prev.filter(a => a.id !== alertToDismiss));
+        setAlertToDismiss(null);
+        Alert.alert('Dismissed', `Alert ${alertToDismiss} is no longer active.`);
+      } else {
+        Alert.alert('Error', err.message || 'Failed to delete alert.');
+      }
+    } finally {
+      setDismissing(false);
+    }
+  };
+
+  const handleAcknowledgeAll = async () => {
+    const activeAlerts = alerts.filter(a => a.state === 'active');
+    if (activeAlerts.length === 0) {
+      Alert.alert('Notice', 'No active alerts to acknowledge.');
+      return;
+    }
+
+    Alert.alert('Acknowledge All Alerts?', `Mark ${activeAlerts.length} active alerts as acknowledged in database?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Acknowledge All',
-        onPress: () => {
-          setAlerts(prev =>
-            prev.map(a => (a.state === 'active' ? { ...a, state: 'acknowledged' as any } : a))
-          );
-          Alert.alert('Success', 'All active alerts acknowledged.');
+        onPress: async () => {
+          try {
+            await Promise.all(activeAlerts.map(a => acknowledgeAlertApi(a.id)));
+            setAlerts(prev =>
+              prev.map(a => (a.state === 'active' ? { ...a, state: 'acknowledged' as AlertState } : a))
+            );
+            Alert.alert('Success', 'All active alerts acknowledged in database.');
+          } catch {
+            loadAlerts();
+          }
         },
       },
     ]);
@@ -468,6 +529,8 @@ export default function AlertsScreen() {
     { key: 'low', label: 'Low', count: alerts.filter(a => a.severity === 'low').length },
   ];
 
+  const hasCriticalOrWarning = nodes.some(n => n.state === 'critical' || n.state === 'warning');
+
   return (
     <View style={styles.screen}>
       <AdminHeader title="System Alerts" showBack onBack={() => router.push('/admin')} />
@@ -485,12 +548,14 @@ export default function AlertsScreen() {
               <Text style={styles.monitorIcon}>INC</Text>
               <View>
                 <Text style={styles.monitorTitle}>Incident Monitor</Text>
-                <Text style={styles.monitorSub}>SLA Target: 99.98% • Live Watch</Text>
+                <Text style={styles.monitorSub}>
+                  {alerts.filter(a => a.state === 'active').length} Active Incidents • Live Database
+                </Text>
               </View>
             </View>
             <View style={styles.liveTailBtn}>
               <View style={styles.liveDot} />
-              <Text style={styles.liveTailText}>LIVE TAIL</Text>
+              <Text style={styles.liveTailText}>LIVE DB</Text>
             </View>
           </View>
         </View>
@@ -563,11 +628,16 @@ export default function AlertsScreen() {
 
         {/* Alert Cards */}
         <View style={[styles.section, styles.alertsGap]}>
-          {filtered.length === 0 ? (
+          {loading ? (
+            <View style={styles.emptyCard}>
+              <ActivityIndicator size="large" color={AC.primary} />
+              <Text style={styles.emptySub}>Loading real database alerts...</Text>
+            </View>
+          ) : filtered.length === 0 ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyIcon}>✅</Text>
               <Text style={styles.emptyTitle}>No matching alerts</Text>
-              <Text style={styles.emptySub}>All systems operating within normal parameters.</Text>
+              <Text style={styles.emptySub}>All database systems operating within normal parameters.</Text>
             </View>
           ) : (
             filtered.map(alert => (
@@ -589,29 +659,35 @@ export default function AlertsScreen() {
           )}
         </View>
 
-        {/* Regional Cascade Risk */}
-        <View style={styles.section}>
-          <View style={styles.cascadeCard}>
-            <View style={styles.cascadeHeader}>
-              <Text style={styles.cascadeTitle}>Regional Cascade Risk</Text>
-              <View style={styles.elevatedBadge}>
-                <Text style={styles.elevatedText}>ELEVATED</Text>
+        {/* Regional Cascade Risk from live Database Monitors */}
+        {nodes.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.cascadeCard}>
+              <View style={styles.cascadeHeader}>
+                <Text style={styles.cascadeTitle}>Database Service Nodes</Text>
+                <View style={hasCriticalOrWarning ? styles.elevatedBadge : styles.healthyBadge}>
+                  <Text style={hasCriticalOrWarning ? styles.elevatedText : styles.healthyText}>
+                    {hasCriticalOrWarning ? 'ATTENTION' : 'NORMAL'}
+                  </Text>
+                </View>
               </View>
-            </View>
-            <View style={styles.nodeRow}>
-              {regionalNodes.map(node => (
-                <NodePill key={node.id} node={node} />
-              ))}
-            </View>
-            <View style={styles.cascadeFooter}>
-              <View style={styles.autoFailRow}>
-                <View style={styles.greenDot} />
-                <Text style={styles.autoFailText}>Auto-failover enabled</Text>
+              <View style={styles.nodeRow}>
+                {nodes.map(node => (
+                  <NodePill key={node.id} node={node} />
+                ))}
               </View>
-              <Text style={styles.heartbeatText}>Next heartbeat: 4s</Text>
+              <View style={styles.cascadeFooter}>
+                <View style={styles.autoFailRow}>
+                  <View style={hasCriticalOrWarning ? styles.amberDot : styles.greenDot} />
+                  <Text style={styles.autoFailText}>
+                    {nodes.filter(n => n.state === 'healthy').length} / {nodes.length} nodes operational
+                  </Text>
+                </View>
+                <Text style={styles.heartbeatText}>Live Evaluated</Text>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* Bottom Actions */}
         <View style={[styles.section, styles.btnSection]}>
@@ -627,12 +703,80 @@ export default function AlertsScreen() {
 
         <View style={{ height: 24 }} />
       </ScrollView>
+
+      {/* Dismiss Alert Modal */}
+      <Modal
+        visible={!!alertToDismiss}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAlertToDismiss(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Dismiss Incident?</Text>
+            <Text style={styles.modalDesc}>
+              Are you sure you want to dismiss incident {alertToDismiss} permanently from database?
+            </Text>
+            <View style={styles.modalActionCol}>
+              <Pressable
+                style={[styles.modalActionBtn, { backgroundColor: AC.danger }]}
+                disabled={dismissing}
+                onPress={confirmDismissAlert}
+              >
+                <Text style={styles.modalBtnText}>Dismiss Incident</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.modalCancelBtn}
+                disabled={dismissing}
+                onPress={() => setAlertToDismiss(null)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <BottomAdminTabs />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalBox: {
+    backgroundColor: AC.bgCard,
+    borderRadius: AR.card,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    gap: 12,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: AC.textPrimary },
+  modalDesc: { fontSize: 13, color: AC.textSecondary, lineHeight: 18 },
+  modalActionCol: { gap: 10, marginTop: 8 },
+  modalActionBtn: {
+    paddingVertical: 12,
+    borderRadius: AR.button,
+    alignItems: 'center',
+  },
+  modalBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  modalCancelBtn: {
+    borderWidth: 1,
+    borderColor: AC.border,
+    paddingVertical: 12,
+    borderRadius: AR.button,
+    alignItems: 'center',
+    backgroundColor: AC.bgApp,
+  },
+  modalCancelText: { color: AC.textSecondary, fontSize: 14, fontWeight: '600' },
   screen: { flex: 1, backgroundColor: AC.bgApp },
   scroll: { flex: 1 },
   content: { padding: AS.screenH, gap: 12 },
@@ -739,6 +883,13 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   elevatedText: { fontSize: 10, fontWeight: '800', color: AC.warningText },
+  healthyBadge: {
+    backgroundColor: AC.successLight,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  healthyText: { fontSize: 10, fontWeight: '800', color: AC.successText },
   nodeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   cascadeFooter: {
     flexDirection: 'row',
@@ -750,6 +901,7 @@ const styles = StyleSheet.create({
   },
   autoFailRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   greenDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: AC.success },
+  amberDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: AC.warning },
   autoFailText: { fontSize: 11, color: AC.textSecondary },
   heartbeatText: { fontSize: 11, color: AC.textTertiary },
   btnSection: { gap: 8 },

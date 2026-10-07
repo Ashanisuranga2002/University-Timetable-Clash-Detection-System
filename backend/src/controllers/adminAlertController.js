@@ -88,20 +88,31 @@ exports.getAlerts = async (req, res) => {
       filter.severity = severity;
     }
 
-    const alerts = await Alert.find(filter).sort({ createdAt: -1 });
+    const alerts = await Alert.find(filter)
+      .populate("monitorId", "serviceName healthStatus responseTime")
+      .sort({ createdAt: -1 });
     return res.status(200).json({ success: true, count: alerts.length, data: alerts });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
+function getAlertLookupQuery(id) {
+  const cleanId = String(id || '').trim();
+  const isObjectId = cleanId.length === 24 && /^[0-9a-fA-F]{24}$/.test(cleanId);
+  return isObjectId
+    ? { $or: [{ _id: cleanId }, { alertId: cleanId }] }
+    : { alertId: cleanId };
+}
+
 // GET /api/admin/alerts/:id
 exports.getAlertById = async (req, res) => {
   try {
     const { id } = req.params;
-    const alert = await Alert.findOne({
-      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { alertId: id }],
-    });
+    const alert = await Alert.findOne(getAlertLookupQuery(id)).populate(
+      "monitorId",
+      "serviceName healthStatus responseTime"
+    );
     if (!alert) {
       return res.status(404).json({ success: false, message: "Alert not found" });
     }
@@ -117,15 +128,22 @@ exports.updateAlertStatus = async (req, res) => {
     const { id } = req.params;
     const { state, note } = req.body;
 
-    const alert = await Alert.findOne({
-      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { alertId: id }],
-    });
+    const alert = await Alert.findOne(getAlertLookupQuery(id));
     if (!alert) {
       return res.status(404).json({ success: false, message: "Alert not found" });
     }
 
     if (state) alert.state = state;
     if (note) alert.resolvedNote = note;
+    if (state === "acknowledged") {
+      alert.acknowledgedAt = new Date();
+      alert.acknowledgedBy = req.headers["x-admin-name"] || req.headers["x-admin-id"] || "Administrator";
+    }
+    if (state === "resolved") {
+      alert.resolvedAt = new Date();
+      alert.resolvedBy = req.headers["x-admin-name"] || req.headers["x-admin-id"] || "Administrator";
+      alert.ttr = "Completed";
+    }
 
     await alert.save();
     return res.status(200).json({ success: true, data: alert, message: `Alert status updated to ${state}` });
@@ -138,11 +156,10 @@ exports.updateAlertStatus = async (req, res) => {
 exports.deleteAlert = async (req, res) => {
   try {
     const { id } = req.params;
-    const alert = await Alert.findOne({
-      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { alertId: id }],
-    });
+    const alert = await Alert.findOne(getAlertLookupQuery(id));
     if (!alert) {
-      return res.status(404).json({ success: false, message: "Alert not found" });
+      // Idempotent delete: if already removed or not found, return 200 so UI cleans up gracefully
+      return res.status(200).json({ success: true, message: "Alert dismissed or already removed" });
     }
 
     await Alert.deleteOne({ _id: alert._id });
@@ -156,13 +173,13 @@ exports.deleteAlert = async (req, res) => {
 exports.acknowledgeAlert = async (req, res) => {
   try {
     const { id } = req.params;
-    const alert = await Alert.findOne({
-      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { alertId: id }],
-    });
+    const alert = await Alert.findOne(getAlertLookupQuery(id));
     if (!alert) {
       return res.status(404).json({ success: false, message: "Alert not found" });
     }
     alert.state = "acknowledged";
+    alert.acknowledgedAt = new Date();
+    alert.acknowledgedBy = req.headers["x-admin-name"] || req.headers["x-admin-id"] || "Administrator";
     await alert.save();
     return res.status(200).json({ success: true, data: alert, message: "Alert acknowledged" });
   } catch (error) {
@@ -175,14 +192,14 @@ exports.resolveAlert = async (req, res) => {
   try {
     const { id } = req.params;
     const { note } = req.body;
-    const alert = await Alert.findOne({
-      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { alertId: id }],
-    });
+    const alert = await Alert.findOne(getAlertLookupQuery(id));
     if (!alert) {
       return res.status(404).json({ success: false, message: "Alert not found" });
     }
     alert.state = "resolved";
     if (note) alert.resolvedNote = note;
+    alert.resolvedAt = new Date();
+    alert.resolvedBy = req.headers["x-admin-name"] || req.headers["x-admin-id"] || "Administrator";
     alert.ttr = "Completed";
     await alert.save();
     return res.status(200).json({ success: true, data: alert, message: "Alert resolved" });
@@ -195,13 +212,13 @@ exports.resolveAlert = async (req, res) => {
 exports.reopenAlert = async (req, res) => {
   try {
     const { id } = req.params;
-    const alert = await Alert.findOne({
-      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { alertId: id }],
-    });
+    const alert = await Alert.findOne(getAlertLookupQuery(id));
     if (!alert) {
       return res.status(404).json({ success: false, message: "Alert not found" });
     }
     alert.state = "active";
+    alert.resolvedAt = null;
+    alert.resolvedBy = "";
     await alert.save();
     return res.status(200).json({ success: true, data: alert, message: "Alert reopened" });
   } catch (error) {

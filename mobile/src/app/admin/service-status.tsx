@@ -15,18 +15,55 @@ import { BottomAdminTabs } from '@/components/admin/BottomAdminTabs';
 import { StatusBadge } from '@/components/admin/StatusBadge';
 import { SectionHeader } from '@/components/admin/SectionHeader';
 import { AC, AR, AS } from '@/constants/adminTheme';
-import { coreServices, InfrastructureService } from '@/constants/adminMonitoringData';
-import { fetchSystemHealthApi } from '@/services/api';
+import {
+  fetchSystemHealthApi,
+  checkMonitorApi,
+  checkAllMonitorsApi,
+  SystemHealthData,
+} from '@/services/api';
 
-function OverallStatusCard({ onRefresh }: { onRefresh: () => void }) {
+interface ServiceItem {
+  id: string;
+  name: string;
+  subtitle: string;
+  latency: string;
+  availability: string;
+  status: 'online' | 'warning' | 'offline';
+  healthStatus?: 'Healthy' | 'Warning' | 'Critical' | 'Offline';
+  enabled?: boolean;
+  note?: string;
+  pod?: string;
+  lastChecked?: string;
+}
+
+function OverallStatusCard({
+  health,
+  onRefresh,
+  refreshing,
+}: {
+  health?: SystemHealthData | null;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  const status = health?.overallStatus || 'Healthy';
+  const isHealthy = status === 'Healthy';
+  const isWarning = status === 'Warning';
+  const statusColor = isHealthy ? AC.success : isWarning ? AC.warning : AC.danger;
+
+  const fleetHealth = health ? `${health.uptime}%` : '--';
+  const latency = health?.averageResponseTime || '--';
+  const alertCount = health ? `${health.activeAlerts} Active` : '--';
+
   return (
     <View style={styles.overallCard}>
       <View style={styles.overallTop}>
         <View style={styles.overallLeft}>
-          <View style={styles.greenDotLg} />
+          <View style={[styles.greenDotLg, { backgroundColor: statusColor }]} />
           <View>
-            <Text style={styles.overallTitle}>Overall Status: Operational</Text>
-            <Text style={styles.overallSub}>All critical systems functioning normally</Text>
+            <Text style={styles.overallTitle}>Overall Status: {status}</Text>
+            <Text style={styles.overallSub}>
+              {health ? `${health.onlineMonitors}/${health.totalMonitors} probes operational` : 'Evaluating system health...'}
+            </Text>
           </View>
         </View>
         <Pressable
@@ -34,124 +71,142 @@ function OverallStatusCard({ onRefresh }: { onRefresh: () => void }) {
           style={styles.refreshBtn}
           accessibilityRole="button"
           accessibilityLabel="Refresh"
+          disabled={refreshing}
         >
-          <Text style={styles.refreshText}>{'\u21ba Refresh'}</Text>
+          {refreshing ? (
+            <ActivityIndicator size="small" color={AC.textSecondary} />
+          ) : (
+            <Text style={styles.refreshText}>{'\u21ba Run Probe'}</Text>
+          )}
         </Pressable>
       </View>
       <View style={styles.metricsRow}>
         <View style={styles.metricItem}>
           <Text style={styles.metricLabel}>Fleet Health</Text>
-          <Text style={[styles.metricVal, { color: AC.success }]}>99.8%</Text>
+          <Text style={[styles.metricVal, { color: AC.success }]}>{fleetHealth}</Text>
         </View>
         <View style={styles.metricDivider} />
         <View style={styles.metricItem}>
           <Text style={styles.metricLabel}>Latency</Text>
-          <Text style={[styles.metricVal, { color: AC.textPrimary }]}>1.47s</Text>
+          <Text style={[styles.metricVal, { color: AC.textPrimary }]}>{latency}</Text>
         </View>
         <View style={styles.metricDivider} />
         <View style={styles.metricItem}>
           <Text style={styles.metricLabel}>System Alerts</Text>
-          <Text style={[styles.metricVal, { color: AC.warning }]}>1 Warning</Text>
+          <Text style={[styles.metricVal, { color: isWarning ? AC.warning : isHealthy ? AC.success : AC.danger }]}>
+            {alertCount}
+          </Text>
         </View>
       </View>
     </View>
   );
 }
 
-function ServiceCard({ svc }: { svc: InfrastructureService }) {
-  const [restarting, setRestarting] = useState(false);
-  const [restarted, setRestarted] = useState(false);
-  const isWarning = svc.status === 'warning';
+function ServiceCard({
+  svc,
+  onProbed,
+}: {
+  svc: ServiceItem;
+  onProbed: () => void;
+}) {
+  const [probing, setProbing] = useState(false);
+  const isWarning = svc.status === 'warning' || svc.healthStatus === 'Warning';
+  const isOffline = svc.status === 'offline' || svc.healthStatus === 'Critical' || svc.healthStatus === 'Offline';
 
-  function handleRestart() {
-    Alert.alert('Restart Notification Worker?', 'This will temporarily interrupt notification delivery.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Restart',
-        style: 'destructive',
-        onPress: () => {
-          setRestarting(true);
-          setTimeout(() => {
-            setRestarting(false);
-            setRestarted(true);
-          }, 2000);
-        },
-      },
-    ]);
+  async function handleProbe() {
+    setProbing(true);
+    try {
+      const res = await checkMonitorApi(svc.id);
+      Alert.alert('Probe Complete', res?.message || 'Service probe executed successfully.');
+      onProbed();
+    } catch (err: any) {
+      Alert.alert('Probe Error', err?.message || 'Could not probe service endpoint.');
+    } finally {
+      setProbing(false);
+    }
   }
 
   const iconMap: Record<string, string> = {
-    'clash-detection': '🔗',
-    registration: '👤',
-    database: '🗄',
-    notification: '🔔',
+    'Engine': '⚙️',
+    'Gateway': '🚪',
+    'Database': '🗄️',
+    'Queue': '🔔',
+    'Service': '🖥️',
+    'Worker': '⚡',
   };
 
+  const icon = iconMap[svc.subtitle] || '🖥️';
+
   return (
-    <View style={[styles.serviceCard, isWarning && styles.serviceCardWarning]}>
+    <View style={[styles.serviceCard, isWarning && styles.serviceCardWarning, isOffline && { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' }]}>
       <View style={styles.serviceTop}>
         <View style={styles.serviceIcon}>
-          <Text style={styles.serviceIconText}>{iconMap[svc.id] ?? '🖥'}</Text>
+          <Text style={styles.serviceIconText}>{icon}</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.serviceName}>{svc.name}</Text>
-          <Text style={[styles.serviceSub, isWarning && { color: AC.warning }]}>
-            {svc.subtitle}
+          <Text style={[styles.serviceSub, isWarning && { color: AC.warning }, isOffline && { color: AC.danger }]}>
+            {svc.subtitle} {svc.enabled === false ? '• Disabled' : ''}
           </Text>
         </View>
-        <StatusBadge variant={restarted ? 'online' : svc.status} />
+        <StatusBadge variant={svc.status} />
       </View>
       <View style={styles.serviceMetrics}>
         <View>
           <Text style={styles.serviceMetLabel}>Response Time</Text>
-          <Text style={[styles.serviceMetVal, isWarning && { color: AC.warning }]}>
-            {svc.latency}
-            {isWarning ? ' (High)' : svc.id === 'database' ? ' (Optimal)' : ''}
+          <Text style={[styles.serviceMetVal, isWarning && { color: AC.warning }, isOffline && { color: AC.danger }]}>
+            {svc.latency || '--'}
           </Text>
         </View>
         <View>
           <Text style={styles.serviceMetLabel}>Availability</Text>
-          <Text style={[styles.serviceMetVal, { color: AC.success }]}>{svc.availability}</Text>
+          <Text style={[styles.serviceMetVal, { color: isOffline ? AC.danger : AC.success }]}>
+            {svc.availability}
+          </Text>
         </View>
       </View>
-      {isWarning && svc.note ? <Text style={styles.noteText}>{svc.note}</Text> : null}
-      {isWarning && !restarted ? (
-        <Pressable
-          style={styles.restartBtn}
-          onPress={handleRestart}
-          disabled={restarting}
-          accessibilityRole="button"
-          accessibilityLabel="Restart Worker"
-        >
-          {restarting ? (
-            <ActivityIndicator color="#FFF" size="small" />
-          ) : (
-            <Text style={styles.restartText}>{'\u26a1 Restart Worker'}</Text>
-          )}
-        </Pressable>
+      {svc.note ? <Text style={[styles.noteText, isOffline && { color: AC.danger }]}>{svc.note}</Text> : null}
+      {svc.lastChecked ? (
+        <Text style={{ fontSize: 10, color: AC.textTertiary }}>
+          Last checked: {new Date(svc.lastChecked).toLocaleTimeString()}
+        </Text>
       ) : null}
-      {restarted ? (
-        <View style={styles.restartedBadge}>
-          <Text style={styles.restartedText}>{'\u2713 Worker restarted successfully'}</Text>
-        </View>
-      ) : null}
+      <Pressable
+        style={[styles.restartBtn, isOffline && { backgroundColor: AC.danger }]}
+        onPress={handleProbe}
+        disabled={probing}
+        accessibilityRole="button"
+        accessibilityLabel="Run Probe Check"
+      >
+        {probing ? (
+          <ActivityIndicator color="#FFF" size="small" />
+        ) : (
+          <Text style={styles.restartText}>{'\u26a1 Run Diagnostic Probe'}</Text>
+        )}
+      </Pressable>
     </View>
   );
 }
 
 export default function ServiceStatusScreen() {
-  const [services, setServices] = useState<InfrastructureService[]>(coreServices);
+  const [healthData, setHealthData] = useState<SystemHealthData | null>(null);
+  const [services, setServices] = useState<ServiceItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadServices = useCallback(async () => {
     try {
       const res = await fetchSystemHealthApi();
-      if (res && res.data && res.data.services && res.data.services.length > 0) {
-        setServices(res.data.services as any);
+      if (res && res.data) {
+        setHealthData(res.data);
+        if (res.data.services) {
+          setServices(res.data.services as any);
+        }
       }
-    } catch {
-      // Fallback to coreServices
+    } catch (err: any) {
+      console.warn('Failed to load system health services:', err?.message);
     } finally {
+      setLoading(false);
       setRefreshing(false);
     }
   }, []);
@@ -162,9 +217,14 @@ export default function ServiceStatusScreen() {
     }, [loadServices])
   );
 
-  function handleRefresh() {
+  async function handleRefreshAll() {
     setRefreshing(true);
-    loadServices();
+    try {
+      await checkAllMonitorsApi();
+    } catch {
+      // probe fallback
+    }
+    await loadServices();
   }
 
   return (
@@ -174,28 +234,47 @@ export default function ServiceStatusScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefreshAll} />}
       >
         <View style={styles.section}>
-          <OverallStatusCard onRefresh={handleRefresh} />
+          <OverallStatusCard
+            health={healthData}
+            onRefresh={handleRefreshAll}
+            refreshing={refreshing}
+          />
         </View>
 
         <View style={styles.section}>
           <SectionHeader
             title="Core Infrastructure Matrix"
-            right={`${services.length} Instances Monitored`}
+            right={`${services.length} Probes Active`}
           />
           <View style={styles.gap}>
-            {services.map(svc => (
-              <ServiceCard key={svc.id} svc={svc} />
-            ))}
+            {loading ? (
+              <View style={{ padding: 32, alignItems: 'center', gap: 10 }}>
+                <ActivityIndicator size="large" color={AC.primary} />
+                <Text style={{ fontSize: 13, color: AC.textSecondary }}>Checking database monitor probes...</Text>
+              </View>
+            ) : services.length === 0 ? (
+              <View style={[styles.overallCard, { alignItems: 'center', padding: 24 }]}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: AC.textPrimary }}>No Monitors Configured</Text>
+                <Text style={{ fontSize: 12, color: AC.textSecondary, marginTop: 4 }}>Add monitors from Monitor Management to begin tracking.</Text>
+                <Pressable onPress={() => router.push('/admin/monitors/add')} style={{ marginTop: 12, backgroundColor: AC.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 }}>
+                  <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 12 }}>+ Add Monitor</Text>
+                </Pressable>
+              </View>
+            ) : (
+              services.map(svc => (
+                <ServiceCard key={svc.id} svc={svc} onProbed={loadServices} />
+              ))
+            )}
           </View>
         </View>
 
         <View style={[styles.section, { marginBottom: 16 }]}>
           <View style={styles.infoCard}>
             <Text style={styles.infoText}>
-              {'\u2705 Automated Edge Synthetics active on 12 distributed regions'}
+              {`✅ Real database probes active • Host: ${healthData?.server || 'MSI'}`}
             </Text>
             <Pressable
               onPress={() => router.push('/admin/system-health')}

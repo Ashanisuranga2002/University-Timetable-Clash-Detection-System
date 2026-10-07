@@ -39,6 +39,17 @@ const adminSchema = new mongoose.Schema(
       trim: true,
       default: "Academic Affairs",
     },
+
+    status: {
+      type: String,
+      enum: ["Active", "Inactive", "Suspended"],
+      default: "Active",
+    },
+
+    lastLogin: {
+      type: Date,
+      default: Date.now,
+    },
   },
   {
     timestamps: true,

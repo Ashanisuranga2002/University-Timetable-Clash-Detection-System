@@ -73,12 +73,11 @@ export default function AddMonitorScreen() {
         enabled,
       });
 
-      Alert.alert('Success', `Monitor for "${serviceName}" configured successfully!`, [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]);
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.push('/admin/monitors');
+      }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to create monitor');
     } finally {
@@ -88,7 +87,7 @@ export default function AddMonitorScreen() {
 
   return (
     <View style={styles.screen}>
-      <AdminHeader title="Configure Monitor" showBack onBack={() => router.back()} />
+      <AdminHeader title="Configure Monitor" showBack onBack={() => (router.canGoBack() ? router.back() : router.push('/admin/monitors'))} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -229,7 +228,7 @@ export default function AddMonitorScreen() {
           <View style={styles.actionRow}>
             <Pressable
               style={styles.cancelBtn}
-              onPress={() => router.back()}
+              onPress={() => (router.canGoBack() ? router.back() : router.push('/admin/monitors'))}
               disabled={loading}
             >
               <Text style={styles.cancelBtnText}>Cancel</Text>

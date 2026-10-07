@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AdminHeader } from '@/components/admin/AdminHeader';
@@ -18,6 +19,8 @@ export default function UserDetailsScreen() {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const loadUser = async () => {
     if (!id) return;
@@ -42,43 +45,39 @@ export default function UserDetailsScreen() {
   }, [id]);
 
   const handleDelete = () => {
+    setShowActionModal(true);
+  };
+
+  const handleToggleStatus = async () => {
     if (!user) return;
     const isCurrentlyActive = user.status === 'Active';
-    const actionLabel = isCurrentlyActive ? 'Deactivate' : 'Activate';
     const newStatus = isCurrentlyActive ? 'Inactive' : 'Active';
+    try {
+      setActionLoading(true);
+      await patchUserStatusApi(user._id || user.userId, newStatus);
+      setShowActionModal(false);
+      await loadUser();
+      Alert.alert('Success', `User status set to ${newStatus}.`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to update user status');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
-    Alert.alert(
-      'User Management Action',
-      `Choose an action for ${user.name}:`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: actionLabel,
-          onPress: async () => {
-            try {
-              await patchUserStatusApi(user._id || user.userId, newStatus);
-              Alert.alert('Success', `User status set to ${newStatus}.`);
-              loadUser();
-            } catch (err: any) {
-              Alert.alert('Error', err.message || `Failed to ${actionLabel.toLowerCase()} user`);
-            }
-          },
-        },
-        {
-          text: 'Delete Permanently',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteUserApi(user._id || user.userId, false);
-              Alert.alert('Success', 'User deleted successfully.');
-              router.replace('/admin/users' as any);
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to delete user');
-            }
-          },
-        },
-      ]
-    );
+  const handlePermanentDelete = async () => {
+    if (!user) return;
+    try {
+      setActionLoading(true);
+      await deleteUserApi(user._id || user.userId, false);
+      setShowActionModal(false);
+      Alert.alert('Success', 'User deleted successfully.');
+      router.replace('/admin/users' as any);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to delete user');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const formattedDate = user?.createdAt
@@ -93,7 +92,7 @@ export default function UserDetailsScreen() {
 
   return (
     <View style={styles.screen}>
-      <AdminHeader title="User Profile" showBack onBack={() => router.back()} />
+      <AdminHeader title="User Profile" showBack onBack={() => (router.canGoBack() ? router.back() : router.push('/admin/users'))} />
 
       {loading ? (
         <View style={styles.centerBox}>
@@ -105,7 +104,7 @@ export default function UserDetailsScreen() {
           <Text style={styles.errorIcon}>⚠️</Text>
           <Text style={styles.errorTitle}>User Not Found</Text>
           <Text style={styles.subText}>{error || 'Could not find the requested user.'}</Text>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Pressable style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.push('/admin/users'))}>
             <Text style={styles.backBtnText}>Return to Users</Text>
           </Pressable>
         </View>
@@ -195,11 +194,91 @@ export default function UserDetailsScreen() {
           <View style={{ height: 32 }} />
         </ScrollView>
       )}
+
+      {/* Action / Delete Modal */}
+      <Modal
+        visible={showActionModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowActionModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>User Account Action</Text>
+            <Text style={styles.modalDesc}>
+              Choose an action for {user?.name} ({user?.userId}):
+            </Text>
+            <View style={styles.modalActionCol}>
+              <Pressable
+                style={[
+                  styles.modalActionBtn,
+                  { backgroundColor: user?.status === 'Active' ? AC.warning : AC.success },
+                ]}
+                disabled={actionLoading}
+                onPress={handleToggleStatus}
+              >
+                <Text style={styles.modalBtnText}>
+                  {user?.status === 'Active' ? 'Deactivate Account' : 'Activate Account'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.modalActionBtn, { backgroundColor: AC.danger }]}
+                disabled={actionLoading}
+                onPress={handlePermanentDelete}
+              >
+                <Text style={styles.modalBtnText}>Delete Permanently</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.modalCancelBtn}
+                disabled={actionLoading}
+                onPress={() => setShowActionModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalBox: {
+    backgroundColor: AC.bgCard,
+    borderRadius: AR.card,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    gap: 12,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: AC.textPrimary },
+  modalDesc: { fontSize: 13, color: AC.textSecondary, lineHeight: 18 },
+  modalActionCol: { gap: 10, marginTop: 8 },
+  modalActionBtn: {
+    paddingVertical: 12,
+    borderRadius: AR.button,
+    alignItems: 'center',
+  },
+  modalBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  modalCancelBtn: {
+    borderWidth: 1,
+    borderColor: AC.border,
+    paddingVertical: 12,
+    borderRadius: AR.button,
+    alignItems: 'center',
+    backgroundColor: AC.bgApp,
+  },
+  modalCancelText: { color: AC.textSecondary, fontSize: 14, fontWeight: '600' },
   screen: { flex: 1, backgroundColor: AC.bgApp },
   scroll: { flex: 1 },
   content: { padding: AS.screenH, gap: 16 },
