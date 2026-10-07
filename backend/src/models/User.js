@@ -1,20 +1,18 @@
 const mongoose = require("mongoose");
 
-const adminSchema = new mongoose.Schema(
+const userSchema = new mongoose.Schema(
   {
-    adminId: {
+    userId: {
       type: String,
       required: true,
       unique: true,
       trim: true,
     },
-
     name: {
       type: String,
       required: true,
       trim: true,
     },
-
     email: {
       type: String,
       required: true,
@@ -22,33 +20,24 @@ const adminSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
-
-    passwordHash: {
-      type: String,
-      required: true,
-    },
-
     role: {
       type: String,
-      enum: ["admin", "superadmin"],
-      default: "admin",
+      enum: ["Student", "Academic Advisor", "Monitor", "Coordinator", "Administrator"],
+      default: "Student",
     },
-
     department: {
       type: String,
       trim: true,
-      default: "Academic Affairs",
+      default: "Faculty of Computing",
     },
-
     status: {
       type: String,
       enum: ["Active", "Inactive", "Suspended"],
       default: "Active",
     },
-
-    lastLogin: {
-      type: Date,
-      default: Date.now,
+    passwordHash: {
+      type: String,
+      select: false,
     },
   },
   {
@@ -56,4 +45,4 @@ const adminSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model("Admin", adminSchema);
+module.exports = mongoose.model("User", userSchema);

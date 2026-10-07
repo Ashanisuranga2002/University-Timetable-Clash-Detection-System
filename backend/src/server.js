@@ -12,6 +12,11 @@ const adminAuthRoutes = require("./routes/admin.auth.routes");
 const adminRoutes = require("./routes/admin.routes");
 const studentRequestRoutes = require("./routes/studentRequestRoutes");
 const advisorReviewRoutes = require("./routes/advisorReviewRoutes");
+const adminUserRoutes = require("./routes/admin.user.routes");
+const adminMonitorRoutes = require("./routes/admin.monitor.routes");
+const adminAlertRoutes = require("./routes/admin.alert.routes");
+const adminSystemHealthRoutes = require("./routes/admin.systemHealth.routes");
+const adminAuth = require("./middleware/adminAuth");
 
 const app = express();
 
@@ -27,6 +32,10 @@ app.use("/api/courses", courseRoutes);
 app.use("/api/registration", registrationRoutes);
 app.use("/api/admin/auth", adminAuthRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/admin/users", adminAuth, adminUserRoutes);
+app.use("/api/admin/monitors", adminAuth, adminMonitorRoutes);
+app.use("/api/admin/alerts", adminAuth, adminAlertRoutes);
+app.use("/api/admin/system-health", adminAuth, adminSystemHealthRoutes);
 
 app.use('/api/student-requests', studentRequestRoutes);
 app.use('/api/advisor-reviews', advisorReviewRoutes);
