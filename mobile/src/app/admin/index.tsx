@@ -52,6 +52,45 @@ function OverallHealthCard({ stats }: { stats?: AdminDashboardStats | null }) {
   );
 }
 
+function ClashDetectionCard({ stats }: { stats?: AdminDashboardStats | null }) {
+  const activeClashes = stats?.clashes?.active ?? 0;
+  const totalClashes = stats?.clashes?.total ?? 0;
+  const isClean = activeClashes === 0;
+
+  return (
+    <Pressable
+      style={styles.clashCard}
+      onPress={() => router.push('/admin-dashboard' as any)}
+      accessibilityRole="button"
+      accessibilityLabel="Timetable Clash Detection Module"
+    >
+      <View style={styles.clashTop}>
+        <View style={styles.clashLeft}>
+          <View style={[styles.clashIconWrap, isClean ? { backgroundColor: '#F0FDF4' } : { backgroundColor: '#FEF2F2' }]}>
+            <Text style={styles.clashIcon}>{isClean ? '🛡️' : '⚡'}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.clashTitle}>Timetable Clash Engine</Text>
+            <Text style={styles.clashSub}>
+              {stats?.clashes
+                ? `${activeClashes} Active Conflict${activeClashes === 1 ? '' : 's'} • ${totalClashes} Recorded Clashes`
+                : 'Real-time schedule conflict engine active'}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.clashBadge, isClean ? styles.clashBadgeClean : styles.clashBadgeActive]}>
+          <Text style={[styles.clashBadgeText, isClean ? styles.clashBadgeTextClean : styles.clashBadgeTextActive]}>
+            {isClean ? 'NO CLASHES' : `${activeClashes} ACTIVE`}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.clashFooter}>
+        <Text style={styles.clashActionText}>Open Course & Timetable Management →</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 function MetricCard({
   label,
   icon,
@@ -214,10 +253,32 @@ export default function AdminDashboard() {
           <OverallHealthCard stats={stats} />
         </View>
 
+        <View style={styles.section}>
+          <ClashDetectionCard stats={stats} />
+        </View>
+
         {/* Management Module Shortcuts */}
         <View style={styles.section}>
           <SectionHeader title="Management" right="Core Modules" />
           <View style={styles.managementGrid}>
+            <Pressable
+              style={styles.mgmtCard}
+              onPress={() => router.push('/admin-dashboard' as any)}
+              accessibilityRole="button"
+              accessibilityLabel="Course & Timetable Administration"
+            >
+              <View style={[styles.mgmtIconWrap, { backgroundColor: '#F5F3FF' }]}>
+                <Text style={styles.mgmtIcon}>📚</Text>
+              </View>
+              <View style={styles.mgmtContent}>
+                <Text style={styles.mgmtTitle}>Course & Timetables</Text>
+                <Text style={styles.mgmtSub}>
+                  {stats?.courses ? `${stats.courses.total} Courses • Timetables & Clashes` : 'Manage courses, schedules & conflicts'}
+                </Text>
+              </View>
+              <Text style={styles.mgmtArrow}>→</Text>
+            </Pressable>
+
             <Pressable
               style={styles.mgmtCard}
               onPress={() => router.push('/admin/users' as any)}
@@ -583,5 +644,84 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: AC.textTertiary,
     fontWeight: '700',
+  },
+  clashCard: {
+    backgroundColor: AC.bgCard,
+    borderRadius: AR.card,
+    borderWidth: 1,
+    borderColor: AC.border,
+    padding: AS.cardH,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  clashTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  clashLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  clashIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clashIcon: {
+    fontSize: 20,
+  },
+  clashTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: AC.textPrimary,
+  },
+  clashSub: {
+    fontSize: 12,
+    color: AC.textSecondary,
+    marginTop: 2,
+  },
+  clashBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  clashBadgeClean: {
+    backgroundColor: AC.successLight,
+  },
+  clashBadgeActive: {
+    backgroundColor: AC.warningLight,
+  },
+  clashBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  clashBadgeTextClean: {
+    color: AC.success,
+  },
+  clashBadgeTextActive: {
+    color: AC.warningText,
+  },
+  clashFooter: {
+    borderTopWidth: 1,
+    borderTopColor: AC.border,
+    paddingTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  clashActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AC.primary,
   },
 });

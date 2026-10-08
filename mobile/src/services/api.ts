@@ -432,6 +432,14 @@ export interface AdminDashboardStats {
     acknowledged: number;
     resolved: number;
   };
+  clashes?: {
+    total: number;
+    active: number;
+    resolved: number;
+  };
+  courses?: {
+    total: number;
+  };
   systemHealth: {
     status: 'Healthy' | 'Warning' | 'Critical' | 'No Data';
     percentage: number | null;
