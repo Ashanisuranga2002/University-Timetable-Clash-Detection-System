@@ -9,7 +9,8 @@ interface FooterTabProps {
   active: TabName;
   studentId?: string;
   adminId?: string;
-  role?: 'student' | 'admin';
+  advisorId?: string;
+  role?: 'student' | 'admin' | 'advisor';
 }
 
 interface TabItem {
@@ -26,6 +27,13 @@ const ADMIN_TABS: TabItem[] = [
   { key: 'profile',   label: 'Profile',   iconName: 'person', iconOutline: 'person-outline' },
 ];
 
+const ADVISOR_TABS: TabItem[] = [
+  { key: 'dashboard', label: 'Dashboard', iconName: 'grid', iconOutline: 'grid-outline' },
+  { key: 'timetable', label: 'Schedule', iconName: 'calendar', iconOutline: 'calendar-outline' },
+  { key: 'requests', label: 'Requests', iconName: 'document-text', iconOutline: 'document-text-outline' },
+  { key: 'profile', label: 'Profile', iconName: 'person', iconOutline: 'person-outline' },
+];
+
 const STUDENT_TABS: TabItem[] = [
   { key: 'dashboard', label: 'Dashboard', iconName: 'grid', iconOutline: 'grid-outline' },
   { key: 'timetable', label: 'Timetable', iconName: 'calendar', iconOutline: 'calendar-outline' },
@@ -33,8 +41,8 @@ const STUDENT_TABS: TabItem[] = [
   { key: 'profile', label: 'Profile', iconName: 'person', iconOutline: 'person-outline' },
 ];
 
-export function FooterTab({ active, studentId = 'IT21047138', adminId, role = 'student' }: FooterTabProps) {
-  const tabs = role === 'admin' ? ADMIN_TABS : STUDENT_TABS;
+export function FooterTab({ active, studentId = 'IT21047138', adminId, advisorId = 'ADV-01', role = 'student' }: FooterTabProps) {
+  const tabs = role === 'admin' ? ADMIN_TABS : role === 'advisor' ? ADVISOR_TABS : STUDENT_TABS;
   const navigate = (key: TabName) => {
     if (key === active) return;
     
@@ -46,6 +54,19 @@ export function FooterTab({ active, studentId = 'IT21047138', adminId, role = 's
       } else {
         router.push({ pathname: '/admin-dashboard', params: { adminId } });
       }
+      return;
+    }
+
+    if (role === 'advisor') {
+      const advisorPathMap: Record<TabName, string> = {
+        dashboard: '/Advisor/dashboard',
+        timetable: '/Advisor/dashboard', // Placeholder for schedule
+        requests: '/Advisor/dashboard',  // Dashboard handles requests
+        profile: '/Advisor/profile',
+        courses: '/Advisor/dashboard',
+        clashes: '/Advisor/dashboard',
+      };
+      router.push({ pathname: advisorPathMap[key] as any, params: { advisorId, role: 'advisor' } });
       return;
     }
 

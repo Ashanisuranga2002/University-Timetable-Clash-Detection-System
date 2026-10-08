@@ -1,5 +1,5 @@
 // mobile/src/app/(advisor)/dashboard.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -8,7 +8,8 @@ import {
   ScrollView,
   SafeAreaView,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  TextInput
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ export default function AdvisorDashboardScreen() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const loadRequests = async () => {
     try {
@@ -48,8 +50,15 @@ export default function AdvisorDashboardScreen() {
     loadRequests();
   };
 
-  // Filter requests based on the active tab
-  const displayedRequests = requests.filter(req => req.status === activeTab);
+  // Filter requests based on the active tab and search query
+  const displayedRequests = requests.filter(req => {
+    const matchesTab = req.status === activeTab;
+    const matchesSearch = 
+      (req.studentId?.toLowerCase().includes(searchQuery.toLowerCase())) || 
+      (req.courseCode?.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    return matchesTab && matchesSearch;
+  });
 
   const pendingCount = requests.filter(req => req.status === 'PENDING').length;
   const approvedCount = requests.filter(req => req.status === 'APPROVED').length;
@@ -137,6 +146,18 @@ export default function AdvisorDashboardScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#98A2B3" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by Student ID or Course Code..."
+            placeholderTextColor="#98A2B3"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+
         {/* Section Header */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
@@ -147,8 +168,8 @@ export default function AdvisorDashboardScreen() {
               </Text>
             </View>
           </View>
-          <TouchableOpacity>
-            <Text style={styles.filterText}>Filter</Text>
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Text style={styles.filterText}>{searchQuery ? 'Clear Search' : 'Filter'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -156,7 +177,23 @@ export default function AdvisorDashboardScreen() {
         {loading ? (
           <ActivityIndicator size="large" color="#4A3AFF" style={{ marginTop: 40 }} />
         ) : displayedRequests.length === 0 ? (
-          <Text style={{ textAlign: 'center', marginTop: 40, color: '#667085' }}>No {activeTab.toLowerCase()} requests.</Text>
+          <View style={styles.emptyStateContainer}>
+            <View style={styles.emptyStateIconCircle}>
+              <Ionicons 
+                name={searchQuery ? 'search-outline' : (activeTab === 'PENDING' ? 'file-tray-outline' : 'checkmark-done-circle-outline')} 
+                size={32} 
+                color="#4A3AFF" 
+              />
+            </View>
+            <Text style={styles.emptyStateTitle}>
+              {searchQuery ? 'No results found' : `No ${activeTab.toLowerCase()} requests`}
+            </Text>
+            <Text style={styles.emptyStateSubtitle}>
+              {searchQuery 
+                ? 'Try adjusting your search query.' 
+                : "You're all caught up! New requests will appear here."}
+            </Text>
+          </View>
         ) : (
           displayedRequests.map((request) => (
             <View key={request._id} style={styles.requestCard}>
@@ -232,7 +269,7 @@ const styles = StyleSheet.create({
   bannerSubtitle: { color: '#E0DFFF', fontSize: 13 },
 
   // Summary Metrics
-  metricsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
+  metricsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
   metricCard: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, marginHorizontal: 4, borderWidth: 1, borderColor: '#EAECF0', elevation: 1 },
   metricCardActivePending: { borderColor: '#F79009', borderWidth: 1.5 },
   metricCardActiveApproved: { borderColor: '#12B76A', borderWidth: 1.5 },
@@ -240,6 +277,17 @@ const styles = StyleSheet.create({
   metricHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   metricLabel: { fontSize: 11, fontWeight: '600', color: '#667085' },
   metricValue: { fontSize: 24, fontWeight: '700', color: '#101828' },
+
+  // Search Bar
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 20, borderWidth: 1, borderColor: '#EAECF0', elevation: 1 },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 14, color: '#101828' },
+
+  // Empty State
+  emptyStateContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, paddingHorizontal: 20 },
+  emptyStateIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#EEF2F6', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  emptyStateTitle: { fontSize: 16, fontWeight: '700', color: '#101828', marginBottom: 8 },
+  emptyStateSubtitle: { fontSize: 14, color: '#667085', textAlign: 'center', lineHeight: 20 },
 
   // Section Header
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
