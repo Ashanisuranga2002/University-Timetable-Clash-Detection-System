@@ -12,6 +12,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { previewTimetableApi, submitRegistrationApi, fetchDashboardApi } from '@/services/api';
+import { FooterTab } from '@/components/FooterTab';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const ROW_HEIGHT = 60; // Each hour block is 60 pixels tall
@@ -222,7 +223,7 @@ export default function TimetablePreviewScreen() {
       } else {
         // Normal registration without clash
         const res = await submitRegistrationApi(studentId as string, courseIds, selectedSlots);
-        router.push('/Student/registration-confirmation');
+        router.push({ pathname: '/Student/registration-confirmation', params: { studentId } });
         setSubmitting(false);
       }
     } catch (err) {
@@ -402,6 +403,7 @@ export default function TimetablePreviewScreen() {
         </View>
 
       </ScrollView>
+      <FooterTab active="timetable" studentId={(studentId as string) || 'IT21047138'} role="student" />
     </SafeAreaView>
   );
 }

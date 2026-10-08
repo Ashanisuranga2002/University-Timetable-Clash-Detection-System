@@ -12,6 +12,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchSubgroupsApi, previewTimetableApi } from '@/services/api';
+import { FooterTab } from '@/components/FooterTab';
 
 export default function AlternativeSubgroupsScreen() {
   const router = useRouter();
@@ -34,8 +35,9 @@ export default function AlternativeSubgroupsScreen() {
     try {
       setLoading(true);
       const res = await fetchSubgroupsApi(clashCourseCode as string);
+      const availableSubgroups = res?.success ? res.subgroups || [] : [];
       if (res?.success) {
-        setSubgroups(res.subgroups);
+        setSubgroups(availableSubgroups);
       }
 
       // Fetch student's current timetable
@@ -43,8 +45,8 @@ export default function AlternativeSubgroupsScreen() {
       const selectedSlots = JSON.parse((selectedSlotsParam as string) || '{}');
       const previewRes = await previewTimetableApi(courseIds, selectedSlots, []);
 
+      let extractedSessions: any[] = [];
       if (previewRes?.success && previewRes.previewCourses) {
-         let extractedSessions: any[] = [];
          previewRes.previewCourses.forEach((c: any) => {
            // Skip the conflicting course because we are REPLACING its slot
            if (c.courseCode === clashCourseCode) return;
@@ -60,6 +62,9 @@ export default function AlternativeSubgroupsScreen() {
          });
          setExistingSessions(extractedSessions);
       }
+
+      // The slot cannot be selected by default
+      setSelectedSubgroup(null);
 
     } catch (err) {
       console.warn(err);
@@ -107,14 +112,14 @@ export default function AlternativeSubgroupsScreen() {
     return hours * 60 + minutes;
   };
 
-  const isSubgroupConflictFree = (sg: any) => {
-    if (!existingSessions || existingSessions.length === 0) return true;
+  const isSubgroupConflictFree = (sg: any, sessions = existingSessions) => {
+    if (!sessions || sessions.length === 0) return true;
     
     if (!sg.day || !sg.startTime || !sg.endTime) return true;
     const sgStart = timeToMinutes(sg.startTime);
     const sgEnd = timeToMinutes(sg.endTime);
 
-    for (const session of existingSessions) {
+    for (const session of sessions) {
       if (!session.day || !session.startTime || !session.endTime) continue;
       
       if (session.day.toLowerCase() === sg.day.toLowerCase()) {
@@ -156,7 +161,7 @@ export default function AlternativeSubgroupsScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         
         <View style={styles.currentCard}>
           <View style={styles.currentBadge}>
@@ -269,7 +274,7 @@ export default function AlternativeSubgroupsScreen() {
           );
         })}
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 16 }} />
       </ScrollView>
 
       {selectedSubgroup && (
@@ -283,6 +288,8 @@ export default function AlternativeSubgroupsScreen() {
         </View>
       )}
 
+      <FooterTab active="timetable" studentId={(studentId as string) || 'IT21047138'} role="student" />
+
     </SafeAreaView>
   );
 }
@@ -290,6 +297,7 @@ export default function AlternativeSubgroupsScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F8FAFC' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scrollView: { flex: 1 },
   
   header: {
     flexDirection: 'row',
@@ -533,10 +541,6 @@ const styles = StyleSheet.create({
   },
 
   bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingVertical: 16,

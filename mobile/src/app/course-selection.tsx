@@ -548,7 +548,7 @@ export default function CourseSelectionScreen() {
       </View>
 
       {/* ── Footer Navigation ─────────────────────────── */}
-      <FooterTab active="courses" studentId={studentId} role="student" />
+      <FooterTab active="timetable" studentId={studentId} role="student" />
     </SafeAreaView>
   );
 }

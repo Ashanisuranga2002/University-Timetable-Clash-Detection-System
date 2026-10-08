@@ -9,13 +9,16 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { FooterTab } from '@/components/FooterTab';
+import { useLocalSearchParams } from 'expo-router';
 
 export default function RegistrationConfirmationScreen() {
   const router = useRouter();
+  const { studentId } = useLocalSearchParams();
 
   const handleReturnToDashboard = () => {
     // Navigate back to the main student dashboard
-    router.replace('/dashboard');
+    router.replace({ pathname: '/dashboard', params: { studentId } });
   };
 
   return (
@@ -75,6 +78,7 @@ export default function RegistrationConfirmationScreen() {
 
         </View>
       </View>
+      <FooterTab active="timetable" studentId={(studentId as string) || 'IT21047138'} role="student" />
     </SafeAreaView>
   );
 }

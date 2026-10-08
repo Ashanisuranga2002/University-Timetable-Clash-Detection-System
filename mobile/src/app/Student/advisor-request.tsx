@@ -14,6 +14,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { submitAlternativeSubgroupRequest } from '@/services/api';
+import { FooterTab } from '@/components/FooterTab';
 
 export default function AdvisorRequestScreen() {
   const router = useRouter();
@@ -53,7 +54,7 @@ export default function AdvisorRequestScreen() {
       Alert.alert(
         'Request Submitted', 
         'Your request has been sent to your advisor for review.',
-        [{ text: 'OK', onPress: () => router.replace({ pathname: '/dashboard', params: { studentId } }) }]
+        [{ text: 'OK', onPress: () => router.replace({ pathname: '/Student/requests', params: { studentId } }) }]
       );
     } catch (err) {
       console.warn(err);
@@ -65,13 +66,16 @@ export default function AdvisorRequestScreen() {
 
   if (!canSubmitRequest) {
     return (
-      <View style={styles.center}>
-        <Ionicons name="lock-closed-outline" size={30} color="#667085" />
-        <Text style={styles.guardText}>Review and confirm a conflict-free timetable before opening the Advisor Request Form.</Text>
-        <TouchableOpacity style={styles.guardButton} onPress={() => router.replace('/dashboard')}>
-          <Text style={styles.submitBtnText}>Return to timetable</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.center, { flex: 1 }]}>
+          <Ionicons name="lock-closed-outline" size={30} color="#667085" />
+          <Text style={styles.guardText}>Review and confirm a conflict-free timetable before opening the Advisor Request Form.</Text>
+          <TouchableOpacity style={styles.guardButton} onPress={() => router.replace('/dashboard')}>
+            <Text style={styles.submitBtnText}>Return to timetable</Text>
+          </TouchableOpacity>
+        </View>
+        <FooterTab active="requests" studentId={(studentId as string) || 'IT21047138'} role="student" />
+      </SafeAreaView>
     );
   }
 
@@ -135,6 +139,7 @@ export default function AdvisorRequestScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      <FooterTab active="requests" studentId={(studentId as string) || 'IT21047138'} role="student" />
     </SafeAreaView>
   );
 }

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { FooterTab } from '@/components/FooterTab';
 
 export default function ScheduleConflictScreen() {
   const router = useRouter();
@@ -120,6 +121,7 @@ export default function ScheduleConflictScreen() {
         </View>
 
       </ScrollView>
+      <FooterTab active="timetable" studentId={(studentId as string) || 'IT21047138'} role="student" />
     </SafeAreaView>
   );
 }

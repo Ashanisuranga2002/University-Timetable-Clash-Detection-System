@@ -38,10 +38,12 @@ exports.getStudentRequests = async (req, res) => {
 exports.updateRequest = async (req, res) => {
     try {
         const { id } = req.params;
-        const { requestedGroup, reason } = req.body;
+        const { studentId, requestedGroup, reason } = req.body;
+        if (!studentId) {
+            return res.status(400).json({ message: 'Student ID is required' });
+        }
 
-        // 1. Find the existing request
-        const request = await StudentRequest.findById(id);
+        const request = await StudentRequest.findOne({ _id: id, studentId });
 
         if (!request) {
             return res.status(404).json({ message: 'Request not found' });
@@ -55,8 +57,12 @@ exports.updateRequest = async (req, res) => {
         }
 
         // 3. Apply the updates
-        request.requestedGroup = requestedGroup || request.requestedGroup;
-        request.reason = reason || request.reason;
+        if (typeof requestedGroup === 'string' && requestedGroup.trim()) {
+            request.requestedGroup = requestedGroup.trim();
+        }
+        if (typeof reason === 'string' && reason.trim()) {
+            request.reason = reason.trim();
+        }
 
         const updatedRequest = await request.save();
         res.status(200).json({ message: 'Request updated successfully', request: updatedRequest });
@@ -69,9 +75,12 @@ exports.updateRequest = async (req, res) => {
 exports.deleteRequest = async (req, res) => {
     try {
         const { id } = req.params;
+        const { studentId } = req.body || {};
+        if (!studentId) {
+            return res.status(400).json({ message: 'Student ID is required' });
+        }
 
-        // 1. Find the existing request
-        const request = await StudentRequest.findById(id);
+        const request = await StudentRequest.findOne({ _id: id, studentId });
 
         if (!request) {
             return res.status(404).json({ message: 'Request not found' });
@@ -85,7 +94,7 @@ exports.deleteRequest = async (req, res) => {
         }
 
         // 3. Delete the document
-        await StudentRequest.findByIdAndDelete(id);
+        await StudentRequest.deleteOne({ _id: id, studentId });
         res.status(200).json({ message: 'Request cancelled successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Error deleting request', error: error.message });

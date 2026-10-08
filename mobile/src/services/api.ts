@@ -173,6 +173,29 @@ export function submitAlternativeSubgroupRequest(
   });
 }
 
+export function fetchStudentRequestsApi(studentId: string) {
+  return apiFetch(`/student-requests/${encodeURIComponent(studentId)}`);
+}
+
+export function updateStudentRequestApi(
+  requestId: string,
+  studentId: string,
+  requestedGroup: string,
+  reason: string
+) {
+  return apiFetch(`/student-requests/${encodeURIComponent(requestId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ studentId, requestedGroup, reason }),
+  });
+}
+
+export function deleteStudentRequestApi(requestId: string, studentId: string) {
+  return apiFetch(`/student-requests/${encodeURIComponent(requestId)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ studentId }),
+  });
+}
+
 // ─── Admin APIs ────────────────────────────────────────────────────────────────
 
 export function loginAdminApi(adminId: string, password: string) {
