@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchAllStudentRequestsApi } from '@/services/api';
+import { getAllRequests } from '@/services/advisorService';
 import { useFocusEffect } from 'expo-router';
 
 export default function AdvisorDashboardScreen() {
@@ -27,7 +27,7 @@ export default function AdvisorDashboardScreen() {
 
   const loadRequests = async () => {
     try {
-      const data = await fetchAllStudentRequestsApi();
+      const data = await getAllRequests();
       if (Array.isArray(data)) {
         setRequests(data);
       }

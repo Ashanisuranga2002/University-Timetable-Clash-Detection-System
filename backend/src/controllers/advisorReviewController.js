@@ -53,6 +53,20 @@ exports.getAdvisorReviews = async (req, res) => {
     }
 };
 
+// READ: View a specific review by the Request ID
+exports.getReviewByRequestId = async (req, res) => {
+    try {
+        const { requestId } = req.params;
+        const review = await AdvisorReview.findOne({ requestId }).sort({ createdAt: -1 });
+        if (!review) {
+            return res.status(404).json({ message: 'No review found for this request' });
+        }
+        res.status(200).json(review);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching review', error: error.message });
+    }
+};
+
 // UPDATE: Edit a draft review or its comments before submitting the decision
 exports.updateReview = async (req, res) => {
     try {

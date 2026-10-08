@@ -7,6 +7,7 @@ const {
     createRequest,
     getAllRequests,
     getStudentRequests,
+    getRequestById,
     updateRequest,
     deleteRequest
 } = require('../controllers/studentRequestController');
@@ -14,6 +15,10 @@ const {
 // READ: View all submitted requests (for Advisor Dashboard)
 // Route: GET /api/student-requests/all
 router.get('/all', getAllRequests);
+
+// READ: View a specific request by ID
+// Route: GET /api/student-requests/request/:id
+router.get('/request/:id', getRequestById);
 
 // CREATE: Submit a new request to change a course group
 // Route: POST /api/student-requests

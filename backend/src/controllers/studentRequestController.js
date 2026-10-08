@@ -45,6 +45,22 @@ exports.getStudentRequests = async (req, res) => {
     }
 };
 
+// READ: View a specific request by its ID
+exports.getRequestById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const request = await StudentRequest.findById(id);
+        
+        if (!request) {
+            return res.status(404).json({ message: 'Request not found' });
+        }
+        
+        res.status(200).json(request);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching request details', error: error.message });
+    }
+};
+
 // UPDATE: Edit a request that has not yet been reviewed
 exports.updateRequest = async (req, res) => {
     try {
