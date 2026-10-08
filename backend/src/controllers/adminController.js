@@ -5,6 +5,7 @@ const Student = require("../models/Student");
 const User = require("../models/User");
 const Monitor = require("../models/Monitor");
 const Alert = require("../models/Alert");
+const Clash = require("../models/Clash");
 
 // Admin: Create a new course
 const createCourse = async (req, res) => {
@@ -185,6 +186,9 @@ const getAdminDashboardStats = async (req, res) => {
       criticalAlerts,
       acknowledgedAlerts,
       resolvedAlerts,
+      totalClashes,
+      activeClashes,
+      totalCourses,
       monitorsList,
       recentAlertsList,
     ] = await Promise.all([
@@ -201,6 +205,9 @@ const getAdminDashboardStats = async (req, res) => {
       Alert.countDocuments({ severity: "critical", state: { $ne: "resolved" } }),
       Alert.countDocuments({ state: "acknowledged" }),
       Alert.countDocuments({ state: "resolved" }),
+      Clash.countDocuments(),
+      Clash.countDocuments({ status: "active" }),
+      Course.countDocuments({ isActive: true }),
       Monitor.find().sort({ createdAt: -1 }),
       Alert.find({ state: { $ne: "resolved" } }).sort({ createdAt: -1 }).limit(5),
     ]);
@@ -267,6 +274,14 @@ const getAdminDashboardStats = async (req, res) => {
           critical: criticalAlerts,
           acknowledged: acknowledgedAlerts,
           resolved: resolvedAlerts,
+        },
+        clashes: {
+          total: totalClashes,
+          active: activeClashes,
+          resolved: Math.max(0, totalClashes - activeClashes),
+        },
+        courses: {
+          total: totalCourses,
         },
         systemHealth: {
           status: healthStatus,

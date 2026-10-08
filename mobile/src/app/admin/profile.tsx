@@ -23,6 +23,7 @@ import {
 } from '@/services/api';
 
 const QUICK_LINKS = [
+  { icon: '📚', label: 'Course & Timetables', sub: 'Manage courses, schedules & clashes', route: '/admin-dashboard' },
   { icon: '👥', label: 'User Management', sub: 'Manage system users', route: '/admin/users' },
   { icon: '🖥️', label: 'Monitor Management', sub: 'Configure service monitors', route: '/admin/monitors' },
   { icon: '⚠️', label: 'Alert Monitor', sub: 'Review system alerts', route: '/admin/alerts' },

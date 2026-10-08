@@ -705,6 +705,15 @@ export default function AdminDashboardScreen() {
         <View style={[styles.topBar, isCompact && styles.topBarCompact]}>
           <View style={styles.profileRow}>
             <TouchableOpacity
+              style={[styles.headerIconButton, { marginRight: 10 }]}
+              onPress={() => router.replace('/admin' as any)}
+              activeOpacity={0.7}
+              accessibilityLabel="Back to Admin Hub"
+            >
+              <Ionicons name="arrow-back" size={20} color="#4F46E5" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.avatar, isCompact && styles.avatarCompact]}
               onPress={() =>
                 router.push({
