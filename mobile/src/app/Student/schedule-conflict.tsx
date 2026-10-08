@@ -32,6 +32,7 @@ export default function ScheduleConflictScreen() {
       params: { 
         studentId, 
         clashCourseCode: primaryClash.course1Code,
+        clashParam: JSON.stringify(primaryClash),
         courseIdsParam,
         selectedSlotsParam
       }

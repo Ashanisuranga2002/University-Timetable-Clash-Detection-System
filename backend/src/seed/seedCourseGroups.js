@@ -43,6 +43,51 @@ const seedGroups = async () => {
         venue: "Lab 3",
         capacity: 40,
         enrolledCount: 15
+      },
+      // Added alternative groups for IT3060
+      {
+        courseCode: "IT3060",
+        courseName: "Human Computer Interaction",
+        groupName: "Group A",
+        day: "Wednesday",
+        startTime: "14:00",
+        endTime: "16:00",
+        venue: "G1302 Lab 03",
+        capacity: 30,
+        enrolledCount: 28
+      },
+      {
+        courseCode: "IT3060",
+        courseName: "Human Computer Interaction",
+        groupName: "Group B",
+        day: "Tuesday",
+        startTime: "09:00",
+        endTime: "11:00",
+        venue: "G1302 Lab 03",
+        capacity: 30,
+        enrolledCount: 18
+      },
+      {
+        courseCode: "IT3060",
+        courseName: "Human Computer Interaction",
+        groupName: "Group C",
+        day: "Tuesday",
+        startTime: "13:00",
+        endTime: "15:00",
+        venue: "G1302 Lab 01",
+        capacity: 30,
+        enrolledCount: 25
+      },
+      {
+        courseCode: "IT3060",
+        courseName: "Human Computer Interaction",
+        groupName: "Group D",
+        day: "Thursday",
+        startTime: "13:00",
+        endTime: "15:00",
+        venue: "G1302 Lab 01",
+        capacity: 30,
+        enrolledCount: 15
       }
     ];
 
