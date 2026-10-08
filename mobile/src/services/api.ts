@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
+// Use your machine IP for physical devices & Expo Go; localhost for web / iOS simulator
+const LOCAL_IP = '192.168.1.2';
 const PORT = '5001';
 
 // Automatically detect host machine IP when running Expo Go or native

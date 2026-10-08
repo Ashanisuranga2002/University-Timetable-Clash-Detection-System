@@ -27,10 +27,10 @@ const loginAdmin = async (req, res) => {
     if (admin) {
       isPasswordValid = await bcrypt.compare(password, admin.passwordHash);
     } else {
-      // 2. Fallback: try finding in User collection with Administrator role
+      // 2. Fallback: try finding in User collection with staff roles
       const userAdmin = await User.findOne({
         $or: [{ userId: cleanId.toUpperCase() }, { email: cleanId.toLowerCase() }],
-        role: "Administrator",
+        role: { $in: ["Administrator", "Coordinator", "Academic Advisor"] },
       }).select("+passwordHash");
 
       if (userAdmin && userAdmin.passwordHash) {
