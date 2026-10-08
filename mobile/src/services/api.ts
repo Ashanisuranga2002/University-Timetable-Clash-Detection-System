@@ -134,6 +134,36 @@ export function submitRegistrationApi(
   });
 }
 
+export function fetchSubgroupsApi(courseCode: string) {
+  return apiFetch(`/coordinator/subgroups/${courseCode}`);
+}
+
+export function previewTimetableApi(
+  courseIds: string[],
+  selectedSlots?: Record<string, string>,
+  proposedSubgroups?: { courseCode: string; subgroupId: string }[]
+) {
+  return apiFetch('/coordinator/preview-timetable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ courseIds, selectedSlots, proposedSubgroups }),
+  });
+}
+
+export function submitAlternativeSubgroupRequest(
+  studentId: string,
+  courseCode: string,
+  currentGroup: string,
+  requestedGroup: string,
+  reason: string
+) {
+  return apiFetch('/student-requests', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId, courseCode, currentGroup, requestedGroup, reason }),
+  });
+}
+
 // ─── Admin APIs ────────────────────────────────────────────────────────────────
 
 export function loginAdminApi(adminId: string, password: string) {
