@@ -164,13 +164,18 @@ export function submitAlternativeSubgroupRequest(
   courseCode: string,
   currentGroup: string,
   requestedGroup: string,
+  conflictDetails: string,
   reason: string
 ) {
   return apiFetch('/student-requests', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ studentId, courseCode, currentGroup, requestedGroup, reason }),
+    body: JSON.stringify({ studentId, courseCode, currentGroup, requestedGroup, conflictDetails, reason }),
   });
+}
+
+export function fetchAllStudentRequestsApi() {
+  return apiFetch('/student-requests/all');
 }
 
 export function fetchStudentRequestsApi(studentId: string) {
@@ -181,6 +186,7 @@ export function updateStudentRequestApi(
   requestId: string,
   studentId: string,
   requestedGroup: string,
+  conflictDetails: string,
   reason: string
 ) {
   return apiFetch(`/student-requests/${encodeURIComponent(requestId)}`, {
@@ -193,6 +199,20 @@ export function deleteStudentRequestApi(requestId: string, studentId: string) {
   return apiFetch(`/student-requests/${encodeURIComponent(requestId)}`, {
     method: 'DELETE',
     body: JSON.stringify({ studentId }),
+  });
+}
+
+export function createAdvisorReviewApi(
+  requestId: string,
+  advisorId: string,
+  comments: string,
+  decision: 'APPROVED' | 'REJECTED' | 'PENDING',
+  reviewStatus: 'DRAFT' | 'SUBMITTED'
+) {
+  return apiFetch('/advisor-reviews', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requestId, advisorId, comments, decision, reviewStatus }),
   });
 }
 

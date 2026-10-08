@@ -22,6 +22,10 @@ const studentRequestSchema = new mongoose.Schema({
         required: [true, 'Requested alternative group is required'],
         trim: true
     },
+    conflictDetails: {
+        type: String,
+        trim: true
+    },
     reason: {
         type: String,
         required: [true, 'Reason for the request is required'],

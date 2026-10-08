@@ -5,10 +5,15 @@ const router = express.Router();
 // Import the controller functions
 const {
     createRequest,
+    getAllRequests,
     getStudentRequests,
     updateRequest,
     deleteRequest
 } = require('../controllers/studentRequestController');
+
+// READ: View all submitted requests (for Advisor Dashboard)
+// Route: GET /api/student-requests/all
+router.get('/all', getAllRequests);
 
 // CREATE: Submit a new request to change a course group
 // Route: POST /api/student-requests

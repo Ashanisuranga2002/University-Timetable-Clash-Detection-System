@@ -45,6 +45,7 @@ export default function AdvisorRequestScreen() {
         proposal.courseCode,
         'Original Group', // We don't necessarily have the original group stored, just pass a placeholder
         proposal.groupName,
+        'Timetable Conflict Detected', // conflictDetails
         reason
       );
       if (!response) {

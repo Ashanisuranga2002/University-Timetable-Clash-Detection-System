@@ -3,13 +3,14 @@ const StudentRequest = require('../models/StudentRequest');
 // CREATE: Submit a new request to change a course group
 exports.createRequest = async (req, res) => {
     try {
-        const { studentId, courseCode, currentGroup, requestedGroup, reason } = req.body;
+        const { studentId, courseCode, currentGroup, requestedGroup, conflictDetails, reason } = req.body;
 
         const newRequest = new StudentRequest({
             studentId,
             courseCode,
             currentGroup,
             requestedGroup,
+            conflictDetails,
             reason
         });
 
@@ -17,6 +18,16 @@ exports.createRequest = async (req, res) => {
         res.status(201).json({ message: 'Request submitted successfully', request: savedRequest });
     } catch (error) {
         res.status(400).json({ message: 'Error submitting request', error: error.message });
+    }
+};
+
+// READ: View all submitted requests (for Advisor Dashboard)
+exports.getAllRequests = async (req, res) => {
+    try {
+        const requests = await StudentRequest.find().sort({ createdAt: -1 });
+        res.status(200).json(requests);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching all requests', error: error.message });
     }
 };
 
