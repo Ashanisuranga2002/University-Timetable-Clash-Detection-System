@@ -42,6 +42,9 @@ export default function StudentLayout() {
         }}
       />
 
+      <Tabs.Screen name="schedule-conflict" options={{ href: null }} />
+      <Tabs.Screen name="advisor-request" options={{ href: null }} />
+
       <Tabs.Screen
         name="registration-confirmation"
         options={{

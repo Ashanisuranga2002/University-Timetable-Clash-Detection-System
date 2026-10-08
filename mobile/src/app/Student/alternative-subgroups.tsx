@@ -15,7 +15,7 @@ import { fetchSubgroupsApi, previewTimetableApi } from '@/services/api';
 
 export default function AlternativeSubgroupsScreen() {
   const router = useRouter();
-  const { studentId, clashCourseCode, clashParam, courseIdsParam, selectedSlotsParam } = useLocalSearchParams();
+  const { studentId, clashCourseCode, clashParam, courseIdsParam, selectedSlotsParam, proposedSubgroupsParam } = useLocalSearchParams();
   
   const [subgroups, setSubgroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,13 +72,23 @@ export default function AlternativeSubgroupsScreen() {
     if (!selectedSubgroup) return;
     
     // Navigate back to the timetable preview with the proposed subgroup
-    const proposedSubgroups = [{ 
+    const existingProposals = proposedSubgroupsParam ? JSON.parse(proposedSubgroupsParam as string) : [];
+    const proposedSubgroups = [...existingProposals.filter((proposal: any) => proposal.courseCode !== clashCourseCode), {
       courseCode: clashCourseCode, 
       subgroupId: selectedSubgroup._id,
-      groupName: selectedSubgroup.groupName 
+      groupName: selectedSubgroup.groupName,
+      day: selectedSubgroup.day,
+      startTime: selectedSubgroup.startTime,
+      endTime: selectedSubgroup.endTime,
+      venue: selectedSubgroup.venue || selectedSubgroup.room,
+      replaceSession: clash ? {
+        day: clash.day,
+        startTime: clash.startTime,
+        endTime: clash.endTime,
+      } : undefined,
     }];
     
-    router.push({
+    router.replace({
       pathname: '/Student/timetable-preview',
       params: { 
         studentId, 

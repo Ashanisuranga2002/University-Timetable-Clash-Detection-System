@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   View, 
   Text, 
@@ -6,19 +6,14 @@ import {
   TouchableOpacity, 
   SafeAreaView,
   ScrollView,
-  Alert,
-  ActivityIndicator
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { submitAlternativeSubgroupRequest } from '@/services/api';
 
 export default function ScheduleConflictScreen() {
   const router = useRouter();
-  const { studentId, courseIdsParam, selectedSlotsParam, clashesParam } = useLocalSearchParams();
+  const { studentId, courseIdsParam, selectedSlotsParam, clashesParam, proposedSubgroupsParam } = useLocalSearchParams();
   
-  const [submitting, setSubmitting] = useState(false);
-
   const clashes = clashesParam ? JSON.parse(clashesParam as string) : [];
   const clashCount = clashes.length;
   
@@ -27,38 +22,17 @@ export default function ScheduleConflictScreen() {
 
   const handleResolve = () => {
     if (!primaryClash) return;
-    router.push({
+    router.replace({
       pathname: '/Student/alternative-subgroups',
       params: { 
         studentId, 
         clashCourseCode: primaryClash.course1Code,
         clashParam: JSON.stringify(primaryClash),
         courseIdsParam,
-        selectedSlotsParam
+        selectedSlotsParam,
+        proposedSubgroupsParam
       }
     });
-  };
-
-  const handleOverride = async () => {
-    if (!primaryClash) return;
-    setSubmitting(true);
-    try {
-      // Submitting an override request to the advisor for the conflict
-      const res = await submitAlternativeSubgroupRequest(
-        studentId as string,
-        primaryClash.course1Code,
-        'Group 1', 
-        'Group 1', // Same group since it's an override request
-        'Requesting advisor override for timetable conflict.'
-      );
-      Alert.alert('Request Sent', 'Your override request has been sent to your advisor.');
-      router.push({ pathname: '/dashboard', params: { studentId } });
-    } catch (err) {
-      console.warn(err);
-      Alert.alert('Error', 'Failed to request override.');
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   return (
@@ -140,14 +114,6 @@ export default function ScheduleConflictScreen() {
             <Text style={styles.resolveButtonText}>Resolve Conflict</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.overrideButton} onPress={handleOverride} disabled={submitting}>
-            {submitting ? (
-              <ActivityIndicator color="#4A3AFF" />
-            ) : (
-              <Text style={styles.overrideButtonText}>Request Advisor Override</Text>
-            )}
-          </TouchableOpacity>
-
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Text style={styles.backButtonText}>Back to Timetable</Text>
           </TouchableOpacity>
@@ -199,8 +165,6 @@ const styles = StyleSheet.create({
   actionsContainer: { gap: 16 },
   resolveButton: { backgroundColor: '#4A3AFF', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   resolveButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  overrideButton: { backgroundColor: '#FFFFFF', paddingVertical: 16, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#4A3AFF' },
-  overrideButtonText: { color: '#4A3AFF', fontSize: 16, fontWeight: '600' },
   backButton: { paddingVertical: 12, alignItems: 'center' },
   backButtonText: { color: '#344054', fontSize: 16, fontWeight: '600' },
 });

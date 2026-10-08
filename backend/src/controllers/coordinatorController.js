@@ -33,19 +33,39 @@ exports.previewTimetable = async (req, res) => {
         if (proposedSubgroups && proposedSubgroups.length > 0) {
             for (const proposal of proposedSubgroups) {
                 const subgroup = await CourseGroup.findById(proposal.subgroupId);
-                if (subgroup) {
-                    const courseIdx = previewCourses.findIndex(c => c.courseCode === subgroup.courseCode);
-                    if (courseIdx !== -1) {
-                        // Keep the original schedule (lecture) intact, but override the slots (lab/tutorial)
-                        previewCourses[courseIdx].slots = [{
-                            slotName: subgroup.groupName,
-                            day: subgroup.day,
-                            startTime: subgroup.startTime,
-                            endTime: subgroup.endTime,
-                            room: subgroup.venue
-                        }];
-                    }
+                if (!subgroup) {
+                    return res.status(404).json({ success: false, message: `Alternative subgroup ${proposal.subgroupId} was not found` });
                 }
+
+                const courseCode = subgroup.courseCode.toUpperCase();
+                if (proposal.courseCode?.toUpperCase() !== courseCode) {
+                    return res.status(400).json({ success: false, message: 'The selected subgroup does not belong to the requested course' });
+                }
+
+                const courseIdx = previewCourses.findIndex(c => c.courseCode?.toUpperCase() === courseCode);
+                if (courseIdx === -1) {
+                    return res.status(400).json({ success: false, message: `Course ${courseCode} is not included in this timetable` });
+                }
+
+                const course = previewCourses[courseIdx];
+                const replacedSession = proposal.replaceSession;
+                if (replacedSession?.day && replacedSession.startTime && replacedSession.endTime) {
+                    const sameTime = (left, right) => (left || '').trim() === (right || '').trim();
+                    course.schedule = (course.schedule || []).filter(session => !(
+                        sameTime(session.day?.toLowerCase(), replacedSession.day.toLowerCase()) &&
+                        sameTime(session.startTime, replacedSession.startTime) &&
+                        sameTime(session.endTime, replacedSession.endTime)
+                    ));
+                }
+
+                // Preserve the course's other meetings, and replace its selected subgroup session.
+                course.slots = [{
+                    slotName: subgroup.groupName,
+                    day: subgroup.day,
+                    startTime: subgroup.startTime,
+                    endTime: subgroup.endTime,
+                    room: subgroup.venue
+                }];
             }
         }
 

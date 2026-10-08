@@ -141,7 +141,16 @@ export function fetchSubgroupsApi(courseCode: string) {
 export function previewTimetableApi(
   courseIds: string[],
   selectedSlots?: Record<string, string>,
-  proposedSubgroups?: { courseCode: string; subgroupId: string }[]
+  proposedSubgroups?: {
+    courseCode: string;
+    subgroupId: string;
+    groupName?: string;
+    day?: string;
+    startTime?: string;
+    endTime?: string;
+    venue?: string;
+    replaceSession?: { day: string; startTime: string; endTime: string };
+  }[]
 ) {
   return apiFetch('/coordinator/preview-timetable', {
     method: 'POST',
