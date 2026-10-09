@@ -1,42 +1,45 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api, setAccessToken, setUnauthorizedHandler } from './api';
-import { clearSession, readSession } from './sessionStorage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
+
 const CoordinatorAuthContext = createContext(null);
-export function CoordinatorAuthProvider({
-  children
-}) {
+
+export function CoordinatorAuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+
   const signOut = useCallback(async () => {
-    setAccessToken(undefined);
     setUser(null);
-    await clearSession();
+    await AsyncStorage.removeItem('current_admin_user');
+    await AsyncStorage.removeItem('saved_user_id');
+    await AsyncStorage.removeItem('saved_password');
+    router.replace('/');
   }, []);
+
   useEffect(() => {
     let active = true;
-    void readSession().then(session => {
+    AsyncStorage.getItem('current_admin_user').then(userData => {
       if (!active) return;
-      if (session) {
-        setAccessToken(session.token);
-        setUser(session.user);
+      if (userData) {
+        try {
+          setUser(JSON.parse(userData));
+        } catch (e) {
+          console.error(e);
+        }
       }
       setLoading(false);
     });
-    setUnauthorizedHandler(() => {
-      setMessage('Your coordinator session expired. Please sign in again.');
-      void signOut();
-    });
+
     return () => {
       active = false;
-      setUnauthorizedHandler(undefined);
     };
-  }, [signOut]);
-  const signIn = useCallback(async (studentId, password, persist = true) => {
-    const result = await api.login(studentId, password, persist);
-    setUser(result.user);
-    setMessage('');
   }, []);
+
+  const signIn = useCallback(async () => {
+    setMessage('Sign in from the main login screen.');
+  }, []);
+
   const value = useMemo(() => ({
     user,
     loading,
@@ -45,8 +48,10 @@ export function CoordinatorAuthProvider({
     signIn,
     signOut
   }), [user, loading, message, signIn, signOut]);
+
   return <CoordinatorAuthContext.Provider value={value}>{children}</CoordinatorAuthContext.Provider>;
 }
+
 export function useCoordinatorAuth() {
   const context = useContext(CoordinatorAuthContext);
   if (!context) throw new Error('useCoordinatorAuth must be used inside CoordinatorAuthProvider.');

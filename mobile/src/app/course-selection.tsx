@@ -114,9 +114,9 @@ export default function CourseSelectionScreen() {
     new Set(['IT3060', 'IT3040', 'IT3080', 'IT3090'])
   );
 
-  // Selected slots for courses with slot choices (e.g. IT3080 -> Slot A)
+  // Selected slots for courses with slot choices (e.g. IT3080 -> Slot B for testing conflicts)
   const [selectedSlots, setSelectedSlots] = useState<Record<string, string>>({
-    IT3080: 'Slot A',
+    IT3080: 'Slot B',
   });
 
   const [saving, setSaving] = useState(false);
@@ -218,79 +218,22 @@ export default function CourseSelectionScreen() {
   const hasSlotBConflict =
     enrolledCodes.has('IT3080') && selectedSlots['IT3080'] === 'Slot B';
 
-  const handleSaveRegistration = async () => {
+  const handleSaveRegistration = () => {
     const enrolledArray = Array.from(enrolledCodes);
     if (enrolledArray.length === 0) {
       Alert.alert('No Courses Selected', 'Please select at least one course to register.');
       return;
     }
 
-    try {
-      setSaving(true);
-      const res = await submitRegistrationApi(studentId, enrolledArray, selectedSlots);
-
-      if (hasSlotBConflict || res?.clashes?.length > 0) {
-        Alert.alert(
-          'Timetable Clash Detected!',
-          'IT3080 (Slot B) overlaps with IT3060 HCI Lab on Wednesday (14:00 - 16:00). Your registration status is set to BLOCKED until resolved.',
-          [
-            {
-              text: 'View Dashboard',
-              onPress: () =>
-                router.push({
-                  pathname: '/dashboard',
-                  params: { studentId },
-                }),
-            },
-            {
-              text: 'Stay & Edit',
-              style: 'cancel',
-            },
-          ]
-        );
-      } else {
-        Alert.alert(
-          'Registration Successful!',
-          `You have successfully registered for ${enrolledArray.length} courses (${totalCredits} Credits) with 0 timetable clashes.`,
-          [
-            {
-              text: 'Find Alternatives',
-              onPress: () =>
-                router.push({
-                  pathname: '/Student/alternative-subgroups',
-                  params: { studentId },
-                }),
-            },
-            {
-              text: 'Go to Dashboard',
-              onPress: () =>
-                router.push({
-                  pathname: '/dashboard',
-                  params: { studentId },
-                }),
-              style: 'cancel',
-            },
-          ]
-        );
-      }
-    } catch {
-      Alert.alert(
-        'Updated Successfully',
-        `Registration saved with ${enrolledArray.length} courses (${totalCredits} credits).`,
-        [
-          {
-            text: 'OK',
-            onPress: () =>
-              router.push({
-                pathname: '/dashboard',
-                params: { studentId },
-              }),
-          },
-        ]
-      );
-    } finally {
-      setSaving(false);
-    }
+    // Navigate to Timetable Preview page
+    router.push({
+      pathname: '/Student/timetable-preview',
+      params: { 
+        studentId, 
+        courseIdsParam: JSON.stringify(enrolledArray),
+        selectedSlotsParam: JSON.stringify(selectedSlots)
+      },
+    });
   };
 
   return (
@@ -605,7 +548,7 @@ export default function CourseSelectionScreen() {
       </View>
 
       {/* ── Footer Navigation ─────────────────────────── */}
-      <FooterTab active="courses" studentId={studentId} role="student" />
+      <FooterTab active="timetable" studentId={studentId} role="student" />
     </SafeAreaView>
   );
 }

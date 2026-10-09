@@ -3,13 +3,14 @@ import { StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-export type TabName = 'dashboard' | 'courses' | 'clashes' | 'profile';
+export type TabName = 'dashboard' | 'timetable' | 'courses' | 'clashes' | 'requests' | 'profile';
 
 interface FooterTabProps {
   active: TabName;
   studentId?: string;
   adminId?: string;
-  role?: 'student' | 'admin';
+  advisorId?: string;
+  role?: 'student' | 'admin' | 'advisor';
 }
 
 interface TabItem {
@@ -19,14 +20,29 @@ interface TabItem {
   iconOutline: keyof typeof Ionicons.glyphMap;
 }
 
-const TABS: TabItem[] = [
+const ADMIN_TABS: TabItem[] = [
   { key: 'dashboard', label: 'Dashboard', iconName: 'grid', iconOutline: 'grid-outline' },
   { key: 'courses',   label: 'Timetable', iconName: 'calendar', iconOutline: 'calendar-outline' },
   { key: 'clashes',   label: 'Requests',  iconName: 'document-text', iconOutline: 'document-text-outline' },
   { key: 'profile',   label: 'Profile',   iconName: 'person', iconOutline: 'person-outline' },
 ];
 
-export function FooterTab({ active, studentId = 'IT21047138', adminId, role = 'student' }: FooterTabProps) {
+const ADVISOR_TABS: TabItem[] = [
+  { key: 'dashboard', label: 'Dashboard', iconName: 'grid', iconOutline: 'grid-outline' },
+  { key: 'timetable', label: 'Schedule', iconName: 'calendar', iconOutline: 'calendar-outline' },
+  { key: 'requests', label: 'Requests', iconName: 'document-text', iconOutline: 'document-text-outline' },
+  { key: 'profile', label: 'Profile', iconName: 'person', iconOutline: 'person-outline' },
+];
+
+const STUDENT_TABS: TabItem[] = [
+  { key: 'dashboard', label: 'Dashboard', iconName: 'grid', iconOutline: 'grid-outline' },
+  { key: 'timetable', label: 'Timetable', iconName: 'calendar', iconOutline: 'calendar-outline' },
+  { key: 'requests', label: 'Requests', iconName: 'document-text', iconOutline: 'document-text-outline' },
+  { key: 'profile', label: 'Profile', iconName: 'person', iconOutline: 'person-outline' },
+];
+
+export function FooterTab({ active, studentId = 'IT21047138', adminId, advisorId = 'ADV-01', role = 'student' }: FooterTabProps) {
+  const tabs = role === 'admin' ? ADMIN_TABS : role === 'advisor' ? ADVISOR_TABS : STUDENT_TABS;
   const navigate = (key: TabName) => {
     if (key === active) return;
     
@@ -41,11 +57,26 @@ export function FooterTab({ active, studentId = 'IT21047138', adminId, role = 's
       return;
     }
 
+    if (role === 'advisor') {
+      const advisorPathMap: Record<TabName, string> = {
+        dashboard: '/Advisor/dashboard',
+        timetable: '/Advisor/dashboard', // Placeholder for schedule
+        requests: '/Advisor/dashboard',  // Dashboard handles requests
+        profile: '/Advisor/profile',
+        courses: '/Advisor/dashboard',
+        clashes: '/Advisor/dashboard',
+      };
+      router.push({ pathname: advisorPathMap[key] as any, params: { advisorId, role: 'advisor' } });
+      return;
+    }
+
     // Student navigation
     const pathMap: Record<TabName, string> = {
       dashboard: '/dashboard',
+      timetable: '/Student/timetable-preview',
       courses: '/course-selection',
       clashes: '/course-selection',
+      requests: '/Student/requests',
       profile: '/profile',
     };
     router.push({ pathname: pathMap[key] as any, params: { studentId, role: 'student' } });
@@ -53,7 +84,7 @@ export function FooterTab({ active, studentId = 'IT21047138', adminId, role = 's
 
   return (
     <View style={styles.bar}>
-      {TABS.map((tab) => {
+      {tabs.map((tab) => {
         const isActive = tab.key === active;
         return (
           <TouchableOpacity

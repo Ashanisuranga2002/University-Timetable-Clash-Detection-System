@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
+// Use your machine IP for physical devices & Expo Go; localhost for web / iOS simulator
+const LOCAL_IP = '192.168.1.2';
 const PORT = '5001';
 
 // Automatically detect host machine IP when running Expo Go or native
@@ -129,6 +131,88 @@ export function submitRegistrationApi(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ studentId, courseIds, selectedSlots: selectedSlots || {} }),
+  });
+}
+
+export function fetchSubgroupsApi(courseCode: string) {
+  return apiFetch(`/coordinator/subgroups/${courseCode}`);
+}
+
+export function previewTimetableApi(
+  courseIds: string[],
+  selectedSlots?: Record<string, string>,
+  proposedSubgroups?: {
+    courseCode: string;
+    subgroupId: string;
+    groupName?: string;
+    day?: string;
+    startTime?: string;
+    endTime?: string;
+    venue?: string;
+    replaceSession?: { day: string; startTime: string; endTime: string };
+  }[]
+) {
+  return apiFetch('/coordinator/preview-timetable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ courseIds, selectedSlots, proposedSubgroups }),
+  });
+}
+
+export function submitAlternativeSubgroupRequest(
+  studentId: string,
+  courseCode: string,
+  currentGroup: string,
+  requestedGroup: string,
+  conflictDetails: string,
+  reason: string
+) {
+  return apiFetch('/student-requests', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId, courseCode, currentGroup, requestedGroup, conflictDetails, reason }),
+  });
+}
+
+export function fetchAllStudentRequestsApi() {
+  return apiFetch('/student-requests/all');
+}
+
+export function fetchStudentRequestsApi(studentId: string) {
+  return apiFetch(`/student-requests/${encodeURIComponent(studentId)}`);
+}
+
+export function updateStudentRequestApi(
+  requestId: string,
+  studentId: string,
+  requestedGroup: string,
+  conflictDetails: string,
+  reason: string
+) {
+  return apiFetch(`/student-requests/${encodeURIComponent(requestId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ studentId, requestedGroup, reason }),
+  });
+}
+
+export function deleteStudentRequestApi(requestId: string, studentId: string) {
+  return apiFetch(`/student-requests/${encodeURIComponent(requestId)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ studentId }),
+  });
+}
+
+export function createAdvisorReviewApi(
+  requestId: string,
+  advisorId: string,
+  comments: string,
+  decision: 'APPROVED' | 'REJECTED' | 'PENDING',
+  reviewStatus: 'DRAFT' | 'SUBMITTED'
+) {
+  return apiFetch('/advisor-reviews', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requestId, advisorId, comments, decision, reviewStatus }),
   });
 }
 

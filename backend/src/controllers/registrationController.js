@@ -2,6 +2,7 @@ const Registration = require("../models/Registration");
 const Student = require("../models/Student");
 const Course = require("../models/Course");
 const Clash = require("../models/Clash");
+const StudentRequest = require("../models/StudentRequest");
 const { detectClashes } = require("../utils/clashDetector");
 
 // Get active registration for a student
@@ -80,6 +81,36 @@ const registerCourses = async (req, res) => {
 
     // Detect timetable clashes
     const detectedClashes = detectClashes(courses, selectedSlots || {});
+
+    // Check StudentRequests for requested groups
+    if (selectedSlots) {
+      const studentRequests = await StudentRequest.find({ studentId: student.studentId });
+      for (const course of courses) {
+        const selectedGroup = selectedSlots[course.courseCode];
+        if (selectedGroup) {
+          const matchingRequest = studentRequests.find(r => 
+            r.courseCode === course.courseCode && 
+            r.requestedGroup === selectedGroup
+          );
+          
+          if (matchingRequest) {
+            if (matchingRequest.status === 'PENDING') {
+              return res.status(403).json({
+                success: false,
+                message: `Cannot register for ${course.courseCode} - ${selectedGroup}. Your subgroup request is still pending advisor approval.`
+              });
+            }
+            if (matchingRequest.status === 'REJECTED') {
+              return res.status(403).json({
+                success: false,
+                message: `Cannot register for ${course.courseCode} - ${selectedGroup}. Your subgroup request was rejected by the advisor.`
+              });
+            }
+            // If APPROVED, we allow registration to proceed
+          }
+        }
+      }
+    }
 
     // Clear old active clashes for this student
     await Clash.deleteMany({ student: student._id });

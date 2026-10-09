@@ -3,13 +3,14 @@ const StudentRequest = require('../models/StudentRequest');
 // CREATE: Submit a new request to change a course group
 exports.createRequest = async (req, res) => {
     try {
-        const { studentId, courseCode, currentGroup, requestedGroup, reason } = req.body;
+        const { studentId, courseCode, currentGroup, requestedGroup, conflictDetails, reason } = req.body;
 
         const newRequest = new StudentRequest({
             studentId,
             courseCode,
             currentGroup,
             requestedGroup,
+            conflictDetails,
             reason
         });
 
@@ -17,6 +18,16 @@ exports.createRequest = async (req, res) => {
         res.status(201).json({ message: 'Request submitted successfully', request: savedRequest });
     } catch (error) {
         res.status(400).json({ message: 'Error submitting request', error: error.message });
+    }
+};
+
+// READ: View all submitted requests (for Advisor Dashboard)
+exports.getAllRequests = async (req, res) => {
+    try {
+        const requests = await StudentRequest.find().sort({ createdAt: -1 });
+        res.status(200).json(requests);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching all requests', error: error.message });
     }
 };
 
@@ -34,14 +45,32 @@ exports.getStudentRequests = async (req, res) => {
     }
 };
 
+// READ: View a specific request by its ID
+exports.getRequestById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const request = await StudentRequest.findById(id);
+        
+        if (!request) {
+            return res.status(404).json({ message: 'Request not found' });
+        }
+        
+        res.status(200).json(request);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching request details', error: error.message });
+    }
+};
+
 // UPDATE: Edit a request that has not yet been reviewed
 exports.updateRequest = async (req, res) => {
     try {
         const { id } = req.params;
-        const { requestedGroup, reason } = req.body;
+        const { studentId, requestedGroup, reason } = req.body;
+        if (!studentId) {
+            return res.status(400).json({ message: 'Student ID is required' });
+        }
 
-        // 1. Find the existing request
-        const request = await StudentRequest.findById(id);
+        const request = await StudentRequest.findOne({ _id: id, studentId });
 
         if (!request) {
             return res.status(404).json({ message: 'Request not found' });
@@ -55,8 +84,12 @@ exports.updateRequest = async (req, res) => {
         }
 
         // 3. Apply the updates
-        request.requestedGroup = requestedGroup || request.requestedGroup;
-        request.reason = reason || request.reason;
+        if (typeof requestedGroup === 'string' && requestedGroup.trim()) {
+            request.requestedGroup = requestedGroup.trim();
+        }
+        if (typeof reason === 'string' && reason.trim()) {
+            request.reason = reason.trim();
+        }
 
         const updatedRequest = await request.save();
         res.status(200).json({ message: 'Request updated successfully', request: updatedRequest });
@@ -69,9 +102,12 @@ exports.updateRequest = async (req, res) => {
 exports.deleteRequest = async (req, res) => {
     try {
         const { id } = req.params;
+        const { studentId } = req.body || {};
+        if (!studentId) {
+            return res.status(400).json({ message: 'Student ID is required' });
+        }
 
-        // 1. Find the existing request
-        const request = await StudentRequest.findById(id);
+        const request = await StudentRequest.findOne({ _id: id, studentId });
 
         if (!request) {
             return res.status(404).json({ message: 'Request not found' });
@@ -85,7 +121,7 @@ exports.deleteRequest = async (req, res) => {
         }
 
         // 3. Delete the document
-        await StudentRequest.findByIdAndDelete(id);
+        await StudentRequest.deleteOne({ _id: id, studentId });
         res.status(200).json({ message: 'Request cancelled successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Error deleting request', error: error.message });

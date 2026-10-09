@@ -16,6 +16,7 @@ const adminUserRoutes = require("./routes/admin.user.routes");
 const adminMonitorRoutes = require("./routes/admin.monitor.routes");
 const adminAlertRoutes = require("./routes/admin.alert.routes");
 const adminSystemHealthRoutes = require("./routes/admin.systemHealth.routes");
+const coordinatorRoutes = require("./routes/coordinator.routes");
 const adminAuth = require("./middleware/adminAuth");
 
 const app = express();
@@ -39,6 +40,7 @@ app.use("/api/admin/system-health", adminAuth, adminSystemHealthRoutes);
 
 app.use('/api/student-requests', studentRequestRoutes);
 app.use('/api/advisor-reviews', advisorReviewRoutes);
+app.use('/api/coordinator', coordinatorRoutes);
 
 app.get("/", (req, res) => {
   res.json({

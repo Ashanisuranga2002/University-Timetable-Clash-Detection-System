@@ -27,7 +27,7 @@ const INDIGO = '#4F46E5';
 
 export default function AdminLoginScreen() {
   // Admin is the default selected role on this page
-  const [selectedRole, setSelectedRole] = useState<'Student' | 'Advisor' | 'Admin'>('Admin');
+  const [selectedRole, setSelectedRole] = useState<'Student' | 'Advisor' | 'Coordinator' | 'Admin'>('Admin');
 
   const [userId, setUserId] = useState('ADM001');
   const [password, setPassword] = useState('admin123');
@@ -86,49 +86,56 @@ export default function AdminLoginScreen() {
       return;
     }
 
+    const upperId = id.toUpperCase();
+    if (selectedRole === 'Student' && !upperId.startsWith('IT')) {
+      setErrorMsg('Student ID must start with "IT".');
+      return;
+    }
+    if (selectedRole === 'Advisor' && !upperId.startsWith('AD')) {
+      setErrorMsg('Advisor ID must start with "AD".');
+      return;
+    }
+    if (selectedRole === 'Coordinator' && !upperId.startsWith('CO')) {
+      setErrorMsg('Coordinator ID must start with "CO".');
+      return;
+    }
+    if (selectedRole === 'Admin' && !upperId.startsWith('AD')) {
+      setErrorMsg('Admin ID must start with "AD".');
+      return;
+    }
+
     setLoading(true);
     setErrorMsg('');
 
     try {
-      // ── Advisor ──────────────────────────────────────────
-      if (selectedRole === 'Advisor') {
-        await saveOrClearCredentials(id, password);
-        router.replace('/Advisor/dashboard' as any);
-        return;
-      }
-
-      // ── Student ──────────────────────────────────────────
-      if (selectedRole === 'Student') {
-        const studentRes = await loginStudentApi(id, password);
-        if (studentRes?.success) {
+      // ── STAFF LOGIN ──────────────────────────────────────────
+      if (selectedRole !== 'Student') {
+        const staffRes = await loginAdminApi(id, password);
+        if (staffRes?.success) {
           await saveOrClearCredentials(id, password);
-          router.replace({ pathname: '/dashboard', params: { studentId: id } });
+          if (staffRes.admin) {
+            await AsyncStorage.setItem('current_admin_user', JSON.stringify(staffRes.admin));
+          }
+          if (selectedRole === 'Advisor' || staffRes.admin?.role === 'Academic Advisor') {
+            router.replace('/Advisor/dashboard' as any);
+          } else if (selectedRole === 'Coordinator' || staffRes.admin?.role === 'Coordinator') {
+            router.replace('/coordinator-dashboard' as any);
+          } else {
+            router.replace({
+              pathname: '/admin',
+              params: {
+                adminId: staffRes.admin?.adminId || id,
+                adminName: staffRes.admin?.name || 'Administrator',
+                adminRole: staffRes.admin?.role || 'Administrator',
+                adminDept: staffRes.admin?.department || 'Academic Affairs',
+              },
+            });
+          }
           return;
         }
-        setErrorMsg('Invalid student ID or password.');
-        return;
-      }
 
-      // ── Admin ─────────────────────────────────────────────
-      const adminRes = await loginAdminApi(id, password);
-      if (adminRes?.success) {
-        await saveOrClearCredentials(id, password);
-        if (adminRes.admin) {
-          await AsyncStorage.setItem('current_admin_user', JSON.stringify(adminRes.admin));
-        }
-        router.replace({
-          pathname: '/admin',
-          params: {
-            adminId: adminRes.admin?.adminId || id,
-            adminName: adminRes.admin?.name || 'Administrator',
-            adminRole: adminRes.admin?.role || 'Administrator',
-            adminDept: adminRes.admin?.department || 'Academic Affairs',
-          },
-        });
-        return;
+        setErrorMsg(`Invalid ${selectedRole} ID or password.`);
       }
-
-      setErrorMsg('Invalid Admin ID or password.');
     } catch (err: any) {
       // Offline / demo fallback
       console.warn('Login error, using offline fallback:', err?.message);
@@ -136,6 +143,8 @@ export default function AdminLoginScreen() {
 
       if (selectedRole === 'Advisor') {
         router.replace('/Advisor/dashboard' as any);
+      } else if (selectedRole === 'Coordinator') {
+        router.replace('/coordinator-dashboard' as any);
       } else if (selectedRole === 'Student') {
         router.replace({ pathname: '/dashboard', params: { studentId: id } });
       } else {
@@ -200,7 +209,7 @@ export default function AdminLoginScreen() {
 
             {/* ROLE SELECTOR — Student / Advisor / Admin */}
             <View style={styles.roleSelectorRow}>
-              {(['Student', 'Advisor', 'Admin'] as const).map((role) => {
+              {(['Student', 'Advisor', 'Coordinator', 'Admin'] as const).map((role) => {
                 const isActive = selectedRole === role;
                 return (
                   <TouchableOpacity
@@ -241,7 +250,10 @@ export default function AdminLoginScreen() {
 
             {/* UNIVERSITY / ADMIN ID */}
             <Text style={styles.fieldLabel}>
-              {selectedRole === 'Admin' ? 'ADMIN ID' : 'UNIVERSITY ID'}
+              {selectedRole === 'Student' ? 'UNIVERSITY ID' :
+               selectedRole === 'Advisor' ? 'ADVISOR ID' :
+               selectedRole === 'Coordinator' ? 'COORDINATOR ID' :
+               'ADMIN ID'}
             </Text>
             <View style={styles.inputShell}>
               <Ionicons
@@ -254,7 +266,12 @@ export default function AdminLoginScreen() {
                 style={styles.input}
                 value={userId}
                 onChangeText={handleUserIdChange}
-                placeholder={selectedRole === 'Admin' ? 'e.g. ADM001' : 'e.g. IT21047138'}
+                placeholder={
+                  selectedRole === 'Student' ? "e.g. IT21047138" :
+                  selectedRole === 'Advisor' ? "e.g. AD001" :
+                  selectedRole === 'Coordinator' ? "e.g. CO001" :
+                  "e.g. AD001"
+                }
                 placeholderTextColor="#94A3B8"
                 autoCapitalize="characters"
                 autoCorrect={false}

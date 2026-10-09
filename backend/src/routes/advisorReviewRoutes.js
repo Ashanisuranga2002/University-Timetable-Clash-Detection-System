@@ -6,6 +6,7 @@ const router = express.Router();
 const {
     createReview,
     getAdvisorReviews,
+    getReviewByRequestId,
     updateReview,
     deleteReview
 } = require('../controllers/advisorReviewController');
@@ -17,6 +18,10 @@ router.post('/', createReview);
 // READ: View all reviews (drafts and submitted) created by a specific advisor
 // Route: GET /api/advisor-reviews/:advisorId
 router.get('/:advisorId', getAdvisorReviews);
+
+// READ: View review for a specific request ID
+// Route: GET /api/advisor-reviews/request/:requestId
+router.get('/request/:requestId', getReviewByRequestId);
 
 // UPDATE: Edit a draft review or its comments
 // Route: PUT /api/advisor-reviews/:id
