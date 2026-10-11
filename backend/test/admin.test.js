@@ -9,10 +9,32 @@ describe("Admin Module - Comprehensive Functional Tests", () => {
   let testCreatedUserId = null;
 
   before(async () => {
-    // Wait for DB connection
-    if (mongoose.connection.readyState === 0) {
-      await mongoose.connect(process.env.MONGO_URI);
+    // Wait for DB connection to be fully ready (readyState === 1)
+    if (mongoose.connection.readyState !== 1) {
+      await new Promise((resolve, reject) => {
+        if (mongoose.connection.readyState === 1) return resolve();
+        mongoose.connection.once("connected", resolve);
+        mongoose.connection.once("error", reject);
+      });
     }
+
+    // Ensure ADM001 exists with known credentials
+    const Admin = require("../src/models/Admin");
+    const bcrypt = require("bcryptjs");
+    let admin = await Admin.findOne({ adminId: "ADM001" });
+    if (!admin) {
+      const passwordHash = await bcrypt.hash("admin123", 10);
+      await Admin.create({
+        adminId: "ADM001",
+        name: "Dr. Sarah Mitchell",
+        email: "admin@university.edu",
+        passwordHash,
+        role: "admin",
+        department: "Academic Affairs",
+        status: "Active",
+      });
+    }
+
     await new Promise((resolve) => {
       server = app.listen(0, () => {
         const port = server.address().port;

@@ -74,6 +74,5 @@ const courseSchema = new mongoose.Schema(
 );
 
 courseSchema.index({ isActive: 1, semester: 1, type: 1 });
-courseSchema.index({ courseCode: 1 });
 
 module.exports = mongoose.model("Course", courseSchema);
