@@ -3,7 +3,7 @@ import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { ActionButton, CoordinatorIcon, CoordinatorScaffold, Panel, ProgressBar, SectionHeading, StatusBadge } from "@/components/Coordinator/CoordinatorUI";
 import CoordinatorTheme from "@/constants/CoordinatorTheme";
-import { api } from "@/services/api";
+import { api } from "@/services/coordinatorApi";
 import { useCoordinatorAuth } from "@/services/CoordinatorAuth";
 const {
   colors,
@@ -53,7 +53,7 @@ function RecentUploadRow({
   danger = false,
   icon
 }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${name}, ${status}`} onPress={() => router.push(danger ? "/(tabs)/errors" : "/(tabs)/timetable")} style={({
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${name}, ${status}`} onPress={() => router.push(danger ? "/coordinator/errors" : "/coordinator/timetable")} style={({
     pressed
   }) => [styles.uploadRow, pressed && styles.pressed]}>
       <View style={[styles.uploadIcon, danger && styles.uploadIconDanger]}>
@@ -132,9 +132,9 @@ export default function CoordinatorDashboard() {
 
       <View style={styles.sectionBlock}>
         <SectionHeading title="Quick Actions" action="Workflow Operations" />
-        <ActionButton label="Upload Master Timetable" icon="upload" onPress={() => router.push("/(tabs)/timetable")} />
-        <ActionButton label="Upload Subgroup Data" icon="group" kind="secondary" onPress={() => router.push("/(tabs)/subgroups")} />
-        <Pressable accessibilityRole="button" accessibilityLabel="Run Validation Engine" onPress={() => router.push("/(tabs)/validation")} style={({
+        <ActionButton label="Upload Master Timetable" icon="upload" onPress={() => router.push("/coordinator/timetable")} />
+        <ActionButton label="Upload Subgroup Data" icon="group" kind="secondary" onPress={() => router.push("/coordinator/subgroups")} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Run Validation Engine" onPress={() => router.push("/coordinator/validation")} style={({
         pressed
       }) => [styles.validationQuickAction, pressed && styles.pressed]}>
           <View style={styles.quickActionLeft}>
@@ -148,7 +148,7 @@ export default function CoordinatorDashboard() {
       </View>
 
       <View style={styles.sectionBlock}>
-        <SectionHeading title="Recent Uploads" action="View all  →" onPress={() => router.push("/(tabs)/timetable")} />
+        <SectionHeading title="Recent Uploads" action="View all  →" onPress={() => router.push("/coordinator/timetable")} />
         <Panel style={styles.uploadsPanel}>
           {recentUploads.length ? recentUploads.map((upload, index) => <View key={upload.id}>{index ? <View style={styles.rowDivider} /> : null}<RecentUploadRow name={upload.fileName} meta={`${formatBytes(upload.fileSize)}  •  ${formatCount(upload.recordCount)} ${upload.type === "timetable" ? "slots" : "rows"}  •  ${relativeTime(new Date(upload.createdAt))} ago`} status={upload.status.toUpperCase()} danger={upload.type === "subgroups" && (stats?.scheduleClashes ?? 0) > 0} icon={upload.type === "timetable" ? "calendar" : "group"} /></View>) : <Text style={styles.emptyText}>No uploads have been added yet.</Text>}
         </Panel>

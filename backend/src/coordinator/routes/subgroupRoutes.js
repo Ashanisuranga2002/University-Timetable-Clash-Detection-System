@@ -1,0 +1,15 @@
+const { Router } = require('express');
+const { bulkCreateSubgroups, createSubgroup, deleteSubgroup, getSubgroup, listSubgroups, updateSubgroup } = require('../controllers/subgroupController.js');
+const { authenticate, requireCoordinator } = require('../middleware/authMiddleware.js');
+const { uploadSubgroupFile } = require('../controllers/fileUploadController.js');
+const { uploadSpreadsheet } = require('../middleware/uploadMiddleware.js');
+const router = Router();
+router.use(authenticate, requireCoordinator);
+router.post('/upload', uploadSpreadsheet, uploadSubgroupFile);
+router.post('/bulk', bulkCreateSubgroups);
+router.post('/', createSubgroup);
+router.get('/', listSubgroups);
+router.get('/:id', getSubgroup);
+router.put('/:id', updateSubgroup);
+router.delete('/:id', deleteSubgroup);
+module.exports = router;

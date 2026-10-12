@@ -40,7 +40,7 @@ export default function CoordinatorProfileScreen() {
         </View>
       </Panel>
 
-      <ActionButton label="Return to Dashboard" icon="dashboard" kind="secondary" onPress={() => router.replace('/(tabs)/dashboard')} />
+      <ActionButton label="Return to Dashboard" icon="dashboard" kind="secondary" onPress={() => router.replace('/coordinator/dashboard')} />
       <ActionButton label="Sign Out" icon="close" kind="danger" onPress={() => Alert.alert('Sign out', 'End the current coordinator session?', [{
       text: 'Cancel',
       style: 'cancel'
@@ -48,7 +48,7 @@ export default function CoordinatorProfileScreen() {
       text: 'Sign Out',
       style: 'destructive',
       onPress: () => {
-        void signOut().then(() => router.replace('/(tabs)'));
+        void signOut().then(() => router.replace('/coordinator'));
       }
     }])} />
     </CoordinatorScaffold>;

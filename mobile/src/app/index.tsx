@@ -458,6 +458,10 @@ export default function LoginScreen() {
               courses and timetable.
             </Text>
 
+            <Pressable accessibilityRole="button" onPress={() => router.push('/coordinator')}>
+              <Text style={{ color: INDIGO, paddingVertical: 12 }}>Coordinator sign in</Text>
+            </Pressable>
+
             {/* ROLE SELECTOR */}
 
             <View

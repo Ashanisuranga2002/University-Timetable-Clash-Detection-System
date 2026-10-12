@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, Text
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import CoordinatorTheme from '@/constants/CoordinatorTheme';
 import { ActionButton, CoordinatorIcon, CoordinatorScaffold, Panel, ProgressBar, SectionHeading, StatusBadge, WorkflowStepper } from '@/components/Coordinator/CoordinatorUI';
-import { api } from '@/services/api';
+import { api } from '@/services/coordinatorApi';
 import { useCoordinatorAuth } from '@/services/CoordinatorAuth';
 const {
   colors,
@@ -242,7 +242,7 @@ export function ValidateDataScreen() {
       </View>
 
       <View style={styles.sectionBlock}>
-        <SectionHeading title="Top Affected Modules" action="See all" onPress={() => router.push('/(tabs)/errors')} />
+        <SectionHeading title="Top Affected Modules" action="See all" onPress={() => router.push('/coordinator/errors')} />
         <Panel style={styles.modulePanel}>
           {topModule ? <>
           <View style={styles.moduleTop}>
@@ -260,7 +260,7 @@ export function ValidateDataScreen() {
 
       <View style={styles.actions}>
         <ActionButton label={`View Validation Errors (${typeCounts.CLASH !== undefined ? Object.values(typeCounts).reduce((a, b) => a + b, 0) : 0})`} icon="arrow" disabled={!timetableId} onPress={() => router.push({
-        pathname: '/(tabs)/errors',
+        pathname: '/coordinator/errors',
         params: {
           timetableId
         }
@@ -376,14 +376,14 @@ export function ValidationErrorsScreen() {
     setPage(1);
   };
   const openError = record => router.push({
-    pathname: '/(tabs)/update',
+    pathname: '/coordinator/update',
     params: {
       errorId: record._id,
       timetableId: record.timetableId
     }
   });
   const representative = records[0];
-  return <CoordinatorScaffold title="View Errors" activeTab="Validation" onBack={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/errors')} backLabel="Back to Validation">
+  return <CoordinatorScaffold title="View Errors" activeTab="Validation" onBack={() => router.canGoBack() ? router.back() : router.replace('/coordinator/errors')} backLabel="Back to Validation">
       <WorkflowStepper currentStep={4} />
       <Panel style={styles.criticalGate}>
         <View style={styles.gateHeading}>
@@ -600,7 +600,7 @@ export function UpdateDataScreen() {
         const next = await api.errors(`status=unresolved&timetableId=${encodeURIComponent(String(record.timetableId))}&limit=1`).catch(() => null);
         if (next?.data.length) {
           router.replace({
-            pathname: '/(tabs)/update',
+            pathname: '/coordinator/update',
             params: {
               errorId: next.data[0]._id,
               timetableId: String(record.timetableId)
@@ -610,7 +610,7 @@ export function UpdateDataScreen() {
         }
       }
       router.replace({
-        pathname: '/(tabs)/errors',
+        pathname: '/coordinator/errors',
         params: {
           timetableId: String(record.timetableId)
         }
@@ -621,9 +621,9 @@ export function UpdateDataScreen() {
       setSaving(false);
     }
   };
-  if (loading) return <CoordinatorScaffold title="Update Data" activeTab="Validation" onBack={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/errors')} backLabel="Back to Error List"><ActivityIndicator color={colors.primary} /></CoordinatorScaffold>;
-  if (!record) return <CoordinatorScaffold title="Update Data" activeTab="Validation" onBack={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/errors')} backLabel="Back to Error List"><Panel><Text style={styles.errorText}>{error || 'There are no unresolved validation errors to update.'}</Text></Panel><ActionButton label="Return to Error List" icon="arrow" onPress={() => router.replace('/(tabs)/errors')} /></CoordinatorScaffold>;
-  return <CoordinatorScaffold title="Update Data" activeTab="Validation" onBack={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/errors')} backLabel="Back to Error List">
+  if (loading) return <CoordinatorScaffold title="Update Data" activeTab="Validation" onBack={() => router.canGoBack() ? router.back() : router.replace('/coordinator/errors')} backLabel="Back to Error List"><ActivityIndicator color={colors.primary} /></CoordinatorScaffold>;
+  if (!record) return <CoordinatorScaffold title="Update Data" activeTab="Validation" onBack={() => router.canGoBack() ? router.back() : router.replace('/coordinator/errors')} backLabel="Back to Error List"><Panel><Text style={styles.errorText}>{error || 'There are no unresolved validation errors to update.'}</Text></Panel><ActionButton label="Return to Error List" icon="arrow" onPress={() => router.replace('/coordinator/errors')} /></CoordinatorScaffold>;
+  return <CoordinatorScaffold title="Update Data" activeTab="Validation" onBack={() => router.canGoBack() ? router.back() : router.replace('/coordinator/errors')} backLabel="Back to Error List">
       <View style={styles.recordBadgeRow}><StatusBadge label={`${record.severity} • ${record.errorType.replaceAll('_', ' ')}`} tone="info" /></View>
       {error ? <Panel><Text style={styles.errorText}>{error}</Text></Panel> : null}
 
@@ -746,7 +746,7 @@ export function UpdateDataScreen() {
         <ActionButton label="Save & Proceed to Next" kind="navy" icon="arrow" disabled={saving || record.status === 'resolved'} onPress={() => {
         void save(true);
       }} />
-        <ActionButton label="Cancel & Revert Changes" kind="secondary" icon="close" disabled={saving} onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/errors')} />
+        <ActionButton label="Cancel & Revert Changes" kind="secondary" icon="close" disabled={saving} onPress={() => router.canGoBack() ? router.back() : router.replace('/coordinator/errors')} />
       </View>
     </CoordinatorScaffold>;
 }

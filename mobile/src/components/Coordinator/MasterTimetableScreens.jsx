@@ -3,12 +3,12 @@ import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Scroll
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ActionButton, CoordinatorScaffold, Panel, StatusBadge } from './CoordinatorUI';
 import CoordinatorTheme from '@/constants/CoordinatorTheme';
-import { api } from '@/services/api';
+import { api } from '@/services/coordinatorApi';
 const {
   colors,
   spacing
 } = CoordinatorTheme;
-const listRoute = '/(tabs)/master-timetables';
+const listRoute = '/coordinator/master-timetables';
 const sizeLabel = size => size >= 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${Math.ceil(size / 1024)} KB`;
 const dateLabel = value => Number.isNaN(Date.parse(value)) ? 'Unavailable' : new Date(value).toLocaleString();
 const message = (cause, fallback) => cause instanceof Error ? cause.message : fallback;
@@ -112,7 +112,7 @@ export function UploadedMasterTimetablesScreen() {
     }
   }]);
   return <CoordinatorScaffold title="Uploaded Master Timetables" activeTab="Timetable" backLabel="Back to Upload" onBack={() => {
-    if (!busy) router.replace('/(tabs)/timetable');
+    if (!busy) router.replace('/coordinator/timetable');
   }}>
     {notice ? <Panel><Text accessibilityLiveRegion="polite" style={styles.success}>{notice}</Text></Panel> : null}
     {error ? <Panel><Text accessibilityRole="alert" style={styles.error}>{error}</Text></Panel> : null}
@@ -137,7 +137,7 @@ export function UploadedMasterTimetablesScreen() {
               setRenameError('');
             }} />
     </Panel></ScrollView></KeyboardAvoidingView></Modal> : null}
-    <ActionButton label="Upload Master Timetable" icon="upload" disabled={busy || !!renaming} onPress={() => router.replace('/(tabs)/timetable')} />
+    <ActionButton label="Upload Master Timetable" icon="upload" disabled={busy || !!renaming} onPress={() => router.replace('/coordinator/timetable')} />
     <ActionButton label="Refresh" kind="secondary" icon="refresh" disabled={loading || busy || !!renaming} onPress={() => {
       void load();
     }} />
@@ -151,7 +151,7 @@ export function UploadedMasterTimetablesScreen() {
       <Text style={styles.meta}>{item.academicYear} • {item.semester}</Text>
       <View style={styles.actions}>
         <View style={styles.action}><ActionButton label="View" kind="secondary" disabled={busy || loading || !!renaming} onPress={() => router.push({
-            pathname: '/(tabs)/master-view',
+            pathname: '/coordinator/master-view',
             params: {
               timetableId: item._id
             }

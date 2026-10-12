@@ -27,3 +27,6 @@ android/local.properties
 
 .vscode/
 .idea/
+
+# Coordinator uploaded spreadsheets
+backend/uploads/

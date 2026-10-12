@@ -148,10 +148,10 @@ export function CoordinatorIcon({
   return <SymbolView name={iconNames[name]} tintColor={color} size={size} />;
 }
 const tabRoutes = {
-  Dashboard: '/(tabs)/dashboard',
-  Timetable: '/(tabs)/timetable',
-  Validation: '/(tabs)/validation',
-  Profile: '/(tabs)/profile'
+  Dashboard: '/coordinator/dashboard',
+  Timetable: '/coordinator/timetable',
+  Validation: '/coordinator/validation',
+  Profile: '/coordinator/profile'
 };
 const tabIcons = {
   Dashboard: 'dashboard',
@@ -198,7 +198,7 @@ export function CoordinatorScaffold({
                 </Pressable> : null}
               <Text style={styles.screenTitle}>{title}</Text>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Open coordinator profile" onPress={() => router.push('/(tabs)/profile')} style={({
+            <Pressable accessibilityRole="button" accessibilityLabel="Open coordinator profile" onPress={() => router.push('/coordinator/profile')} style={({
             pressed
           }) => [styles.profileButton, pressed && styles.pressed]}>
               <CoordinatorIcon name="profile" color={colors.primary} size={22} />

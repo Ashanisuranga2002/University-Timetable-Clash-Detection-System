@@ -1,0 +1,15 @@
+const { Router } = require('express');
+const { createTimetable, deleteTimetable, getTimetable, getTimetableSessions, listTimetables, updateTimetable } = require('../controllers/timetableController.js');
+const { authenticate, requireCoordinator } = require('../middleware/authMiddleware.js');
+const { uploadTimetableFile } = require('../controllers/fileUploadController.js');
+const { uploadSpreadsheet } = require('../middleware/uploadMiddleware.js');
+const router = Router();
+router.use(authenticate, requireCoordinator);
+router.post('/upload', uploadSpreadsheet, uploadTimetableFile);
+router.post('/', createTimetable);
+router.get('/', listTimetables);
+router.get('/:id/sessions', getTimetableSessions);
+router.get('/:id', getTimetable);
+router.put('/:id', updateTimetable);
+router.delete('/:id', deleteTimetable);
+module.exports = router;

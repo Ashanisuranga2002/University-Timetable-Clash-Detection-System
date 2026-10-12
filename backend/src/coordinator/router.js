@@ -1,0 +1,17 @@
+const express = require('express');
+const { errorHandler, notFoundHandler } = require('./middleware/errorMiddleware');
+const { authenticate, requireCoordinator } = require('./middleware/authMiddleware');
+const { uploadsDirectory } = require('./middleware/uploadMiddleware');
+const router = express.Router();
+router.use(express.json({ limit: '10mb' }));
+router.use('/uploads', authenticate, requireCoordinator, express.static(uploadsDirectory, { dotfiles: 'deny', index: false }));
+router.get('/health', (_req, res) => res.json({ success: true }));
+router.use('/auth', require('./routes/authRoutes'));
+router.use('/dashboard', require('./routes/dashboardRoutes'));
+router.use('/timetables', require('./routes/timetableRoutes'));
+router.use('/subgroups', require('./routes/subgroupRoutes'));
+router.use('/validation', require('./routes/validationRoutes'));
+router.use('/errors', require('./routes/errorRoutes'));
+router.use(notFoundHandler);
+router.use(errorHandler);
+module.exports = router;

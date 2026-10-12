@@ -5,7 +5,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import CoordinatorTheme from '@/constants/CoordinatorTheme';
 import { ActionButton, CoordinatorIcon, CoordinatorScaffold, LabeledValue, Panel, SectionHeading, StatusBadge, WorkflowStepper } from '@/components/Coordinator/CoordinatorUI';
 import { CoordinatorRecordEditor } from './CoordinatorRecordEditor';
-import { api } from '@/services/api';
+import { api } from '@/services/coordinatorApi';
 const spreadsheetMimeTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv', 'application/csv', 'application/octet-stream'];
 async function pickSpreadsheet() {
   const result = await DocumentPicker.getDocumentAsync({
@@ -115,7 +115,7 @@ export function UploadTimetableScreen() {
       });
       setFile(null);
       router.push({
-        pathname: '/(tabs)/master-timetables',
+        pathname: '/coordinator/master-timetables',
         params: {
           uploadedId: result.data.timetable._id
         }
@@ -127,7 +127,7 @@ export function UploadTimetableScreen() {
     }
   };
   return <CoordinatorScaffold title="Upload Master Timetable" activeTab="Timetable" backLabel="Back to Dashboard" onBack={() => {
-    if (!busy) router.replace('/(tabs)/dashboard');
+    if (!busy) router.replace('/coordinator/dashboard');
   }}>
       {scopeEditing ? <CoordinatorRecordEditor title="Scope Configuration" fields={timetableFields} initial={{
       academicYear: term.split(' — ')[0],
@@ -193,7 +193,7 @@ export function UploadTimetableScreen() {
         <ActionButton label={busy ? 'Uploading…' : 'Upload Master Timetable'} icon="upload" disabled={!file || busy} onPress={() => {
         void upload();
       }} />
-        <ActionButton label="Uploaded Master Timetables" kind="secondary" icon="file" disabled={busy} onPress={() => router.push('/(tabs)/master-timetables')} />
+        <ActionButton label="Uploaded Master Timetables" kind="secondary" icon="file" disabled={busy} onPress={() => router.push('/coordinator/master-timetables')} />
         <ActionButton label="Cancel & Reset File" kind="secondary" icon="close" disabled={busy} onPress={() => {
         setFile(null);
         setError('');
@@ -404,12 +404,12 @@ export function UploadSubgroupsScreen() {
 
       <View style={styles.actions}>
         <ActionButton label="Save & Proceed to Validate Data" icon="arrow" disabled={!timetableId || busy} onPress={() => router.push({
-        pathname: '/(tabs)/validation',
+        pathname: '/coordinator/validation',
         params: {
           timetableId
         }
       })} />
-        <ActionButton label="Cancel & Re-upload" kind="secondary" icon="close" onPress={() => router.replace('/(tabs)/timetable')} />
+        <ActionButton label="Cancel & Re-upload" kind="secondary" icon="close" onPress={() => router.replace('/coordinator/timetable')} />
       </View>
     </CoordinatorScaffold>;
 }

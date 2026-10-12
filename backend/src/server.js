@@ -24,6 +24,8 @@ const app = express();
 connectDB();
 
 app.use(cors());
+// Isolate module CRUD from the existing Student/Advisor Coordinator endpoints.
+app.use('/api/coordinator/module', require('./coordinator/router'));
 app.use(express.json());
 
 // Routes

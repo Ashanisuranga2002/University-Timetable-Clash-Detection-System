@@ -1,0 +1,12 @@
+const { Router } = require('express');
+const { batchResolveErrors, deleteError, getError, listErrors, resolveError, updateError } = require('../controllers/errorController.js');
+const { authenticate, requireCoordinator } = require('../middleware/authMiddleware.js');
+const router = Router();
+router.use(authenticate, requireCoordinator);
+router.put('/batch-resolve', batchResolveErrors);
+router.get('/', listErrors);
+router.put('/:id/resolve', resolveError);
+router.get('/:id', getError);
+router.put('/:id', updateError);
+router.delete('/:id', deleteError);
+module.exports = router;
