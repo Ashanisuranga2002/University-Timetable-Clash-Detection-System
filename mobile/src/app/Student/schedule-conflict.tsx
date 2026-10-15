@@ -17,9 +17,12 @@ export default function ScheduleConflictScreen() {
   
   const clashes = clashesParam ? JSON.parse(clashesParam as string) : [];
   const clashCount = clashes.length;
+  const selectedSlots = selectedSlotsParam ? JSON.parse(selectedSlotsParam as string) : {};
   
   // Use the first clash to display
   const primaryClash = clashCount > 0 ? clashes[0] : null;
+  const groupFor = (code: string, groupFromClash?: string | null) =>
+    groupFromClash || selectedSlots[code] || selectedSlots[code?.toUpperCase()] || 'Scheduled session';
 
   const handleResolve = () => {
     if (!primaryClash) return;
@@ -57,7 +60,7 @@ export default function ScheduleConflictScreen() {
           </View>
           <Text style={styles.warningTitle}>{clashCount} Timetable Conflict Remains</Text>
           <Text style={styles.warningSubtitle}>
-            Please resolve the overlapping slot before confirming your course registration.
+            Select another group for the conflicted course to continue with your registration request.
           </Text>
         </View>
 
@@ -72,7 +75,9 @@ export default function ScheduleConflictScreen() {
             {/* Course 1 Box */}
             <View style={styles.courseBox}>
               <View style={styles.courseBoxHeader}>
-                <Text style={styles.courseName}>{primaryClash.course2Code} • Group A</Text>
+                <Text style={styles.courseName}>
+                  {primaryClash.course2Code} • {groupFor(primaryClash.course2Code, primaryClash.course2Group)}
+                </Text>
                 <View style={styles.enrolledBadge}>
                   <Text style={styles.enrolledBadgeText}>ENROLLED SLOT</Text>
                 </View>
@@ -93,7 +98,9 @@ export default function ScheduleConflictScreen() {
             {/* Course 2 Box (Conflicted) */}
             <View style={[styles.courseBox, styles.courseBoxConflicted]}>
               <View style={styles.courseBoxHeader}>
-                <Text style={[styles.courseName, { color: '#B42318' }]}>{primaryClash.course1Code} • Group A</Text>
+                <Text style={[styles.courseName, { color: '#B42318' }]}>
+                  {primaryClash.course1Code} • {groupFor(primaryClash.course1Code, primaryClash.course1Group)}
+                </Text>
                 <Text style={styles.conflictedText}>CONFLICTED</Text>
               </View>
               <Text style={styles.courseDetails}>
@@ -112,7 +119,8 @@ export default function ScheduleConflictScreen() {
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
           <TouchableOpacity style={styles.resolveButton} onPress={handleResolve}>
-            <Text style={styles.resolveButtonText}>Resolve Conflict</Text>
+            <Ionicons name="swap-horizontal" size={20} color="#FFFFFF" />
+            <Text style={styles.resolveButtonText}>Continue with Another Group</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -121,7 +129,7 @@ export default function ScheduleConflictScreen() {
         </View>
 
       </ScrollView>
-      <FooterTab active="timetable" studentId={(studentId as string) || 'IT21047138'} role="student" />
+      <FooterTab active="timetable" studentId={studentId as string} role="student" />
     </SafeAreaView>
   );
 }
@@ -165,7 +173,7 @@ const styles = StyleSheet.create({
   footerAlternatives: { fontSize: 12, fontWeight: '600', color: '#DC6803' },
   
   actionsContainer: { gap: 16 },
-  resolveButton: { backgroundColor: '#4A3AFF', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  resolveButton: { backgroundColor: '#4A3AFF', paddingVertical: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
   resolveButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
   backButton: { paddingVertical: 12, alignItems: 'center' },
   backButtonText: { color: '#344054', fontSize: 16, fontWeight: '600' },

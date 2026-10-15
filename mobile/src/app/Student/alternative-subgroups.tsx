@@ -6,7 +6,6 @@ import {
   ScrollView, 
   TouchableOpacity, 
   ActivityIndicator,
-  Switch,
   SafeAreaView
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -21,10 +20,16 @@ export default function AlternativeSubgroupsScreen() {
   const [subgroups, setSubgroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSubgroup, setSelectedSubgroup] = useState<any>(null);
-  const [showConflictFree, setShowConflictFree] = useState(false);
   const [existingSessions, setExistingSessions] = useState<any[]>([]);
+  const [conflictCheckReady, setConflictCheckReady] = useState(false);
 
   const clash = clashParam ? JSON.parse(clashParam as string) : null;
+  const selectedSlots = selectedSlotsParam ? JSON.parse(selectedSlotsParam as string) : {};
+  const currentGroup =
+    clash?.course1Group ||
+    selectedSlots[clashCourseCode as string] ||
+    selectedSlots[(clashCourseCode as string || '').toUpperCase()] ||
+    'Current schedule';
 
   useEffect(() => {
     if (!clashCourseCode) return;
@@ -49,7 +54,7 @@ export default function AlternativeSubgroupsScreen() {
       if (previewRes?.success && previewRes.previewCourses) {
          previewRes.previewCourses.forEach((c: any) => {
            // Skip the conflicting course because we are REPLACING its slot
-           if (c.courseCode === clashCourseCode) return;
+           if (c.courseCode?.toUpperCase() === String(clashCourseCode).toUpperCase()) return;
            
            if (c.schedule && c.schedule.length > 0) {
              extractedSessions.push(...c.schedule);
@@ -61,6 +66,7 @@ export default function AlternativeSubgroupsScreen() {
            }
          });
          setExistingSessions(extractedSessions);
+         setConflictCheckReady(true);
       }
 
       // The slot cannot be selected by default
@@ -68,6 +74,7 @@ export default function AlternativeSubgroupsScreen() {
 
     } catch (err) {
       console.warn(err);
+      setConflictCheckReady(false);
     } finally {
       setLoading(false);
     }
@@ -82,10 +89,12 @@ export default function AlternativeSubgroupsScreen() {
       courseCode: clashCourseCode, 
       subgroupId: selectedSubgroup._id,
       groupName: selectedSubgroup.groupName,
+      currentGroup,
       day: selectedSubgroup.day,
       startTime: selectedSubgroup.startTime,
       endTime: selectedSubgroup.endTime,
       venue: selectedSubgroup.venue || selectedSubgroup.room,
+      requestType: 'ADVISOR_APPROVAL',
       replaceSession: clash ? {
         day: clash.day,
         startTime: clash.startTime,
@@ -101,6 +110,30 @@ export default function AlternativeSubgroupsScreen() {
         selectedSlotsParam,
         proposedSubgroupsParam: JSON.stringify(proposedSubgroups)
       }
+    });
+  };
+
+  const requestCoordinatorAssignment = () => {
+    const proposal = {
+      courseCode: clashCourseCode,
+      currentGroup,
+      groupName: 'Coordinator assignment required',
+      requestType: 'COORDINATOR_CHANGE',
+      replaceSession: clash ? {
+        day: clash.day,
+        startTime: clash.startTime,
+        endTime: clash.endTime,
+      } : undefined,
+    };
+    router.replace({
+      pathname: '/Student/advisor-request',
+      params: {
+        studentId,
+        courseIdsParam,
+        selectedSlotsParam,
+        proposedSubgroupsParam: JSON.stringify([proposal]),
+        previewConfirmed: 'true',
+      },
     });
   };
 
@@ -138,10 +171,10 @@ export default function AlternativeSubgroupsScreen() {
     return true;
   };
 
-  const filteredSubgroups = subgroups.filter(sg => {
-    if (showConflictFree) return isSubgroupConflictFree(sg);
-    return true;
-  });
+  // Do not offer a subgroup that still overlaps the student's timetable.
+  const filteredSubgroups = conflictCheckReady
+    ? subgroups.filter(sg => isSubgroupConflictFree(sg))
+    : [];
 
   if (loading) {
     return (
@@ -171,7 +204,7 @@ export default function AlternativeSubgroupsScreen() {
             {clashCourseCode} {clash?.course1Name ? `- ${clash.course1Name}` : ''}
           </Text>
           <Text style={styles.allocatedText}>
-            Currently Allocated: <Text style={{fontWeight:'700', color: '#101828'}}>Group A</Text> 
+            Currently Allocated: <Text style={{fontWeight:'700', color: '#101828'}}>{currentGroup}</Text>
             {clash ? ` (${clash.day} ${clash.startTime} - ${clash.endTime})` : ''}
           </Text>
 
@@ -191,21 +224,31 @@ export default function AlternativeSubgroupsScreen() {
 
         <View style={styles.altHeaderRow}>
           <Text style={styles.altHeaderTitle}>Available Alternatives</Text>
-          <Text style={styles.altCountText}>{filteredSubgroups.length} Available</Text>
+          <Text style={styles.altCountText}>{filteredSubgroups.length} Conflict-free</Text>
         </View>
 
         <View style={styles.filterRow}>
           <View style={styles.filterLeft}>
             <Ionicons name="filter-outline" size={20} color="#667085" />
-            <Text style={styles.filterText}>Show conflict-free only</Text>
+            <Text style={styles.filterText}>Only conflict-free subgroups are shown</Text>
           </View>
-          <Switch 
-            value={showConflictFree} 
-            onValueChange={setShowConflictFree}
-            trackColor={{ false: '#E2E8F0', true: '#4A3AFF' }}
-            thumbColor="#FFFFFF"
-          />
+          <Ionicons name="checkmark-circle" size={20} color="#039855" />
         </View>
+
+        {conflictCheckReady && filteredSubgroups.length === 0 ? (
+          <View style={styles.noAlternativesCard}>
+            <Ionicons name="alert-circle-outline" size={22} color="#B54708" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.noAlternativesText}>
+                No configured subgroup is free at this time. Ask the coordinator to assign another time.
+              </Text>
+              <TouchableOpacity style={styles.coordinatorRequestButton} onPress={requestCoordinatorAssignment}>
+                <Text style={styles.coordinatorRequestButtonText}>Request a new time</Text>
+                <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
 
         {filteredSubgroups.map((group, index) => {
           const isSelected = selectedSubgroup?._id === group._id;
@@ -288,7 +331,7 @@ export default function AlternativeSubgroupsScreen() {
         </View>
       )}
 
-      <FooterTab active="timetable" studentId={(studentId as string) || 'IT21047138'} role="student" />
+      <FooterTab active="timetable" studentId={studentId as string} role="student" />
 
     </SafeAreaView>
   );
@@ -422,6 +465,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginBottom: 16,
+  },
+  noAlternativesCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFAEB',
+    borderColor: '#FEDF89',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  noAlternativesText: {
+    color: '#7A2E0E',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  coordinatorRequestButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    backgroundColor: '#B54708',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  coordinatorRequestButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   filterLeft: {
     flexDirection: 'row',

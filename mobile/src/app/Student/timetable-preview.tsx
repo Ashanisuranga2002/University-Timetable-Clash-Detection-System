@@ -11,8 +11,9 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { previewTimetableApi, submitRegistrationApi, fetchDashboardApi } from '@/services/api';
+import { previewTimetableApi, submitRegistrationApi, fetchDashboardApi, fetchCoursesApi } from '@/services/api';
 import { FooterTab } from '@/components/FooterTab';
+
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const ROW_HEIGHT = 60; // Each hour block is 60 pixels tall
@@ -27,9 +28,31 @@ const COLORS = [
 const formatPreviewTime = (minutes: number) =>
   `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 export default function TimetablePreviewScreen() {
   const router = useRouter();
-  const { studentId, courseIdsParam, selectedSlotsParam, proposedSubgroupsParam } = useLocalSearchParams();
+  const { studentId: propStudentId, courseIdsParam, selectedSlotsParam, proposedSubgroupsParam } = useLocalSearchParams();
+  const [sessionStudent, setSessionStudent] = useState<any>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('current_student_user').then((raw) => {
+      if (raw) {
+        try {
+          setSessionStudent(JSON.parse(raw));
+        } catch {}
+      }
+    });
+  }, []);
+
+  const studentId = (propStudentId as string) || sessionStudent?.studentId || sessionStudent?.userId || '';
+  const initials = (sessionStudent?.name || studentId || 'Student')
+    .trim()
+    .split(/\s+/)
+    .map((part: string) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
   const proposedSubgroups = proposedSubgroupsParam ? JSON.parse(proposedSubgroupsParam as string) : [];
   const isConflictFreePreview = proposedSubgroups.length > 0;
 
@@ -39,29 +62,47 @@ export default function TimetablePreviewScreen() {
   const [clashes, setClashes] = useState<any[]>([]);
   const [hasClashes, setHasClashes] = useState(false);
   const [previewLoaded, setPreviewLoaded] = useState(false);
+  const [previewCourseIds, setPreviewCourseIds] = useState<string[]>([]);
+  const [previewSelectedSlots, setPreviewSelectedSlots] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchPreview();
-  }, [courseIdsParam, proposedSubgroupsParam]);
+  }, [courseIdsParam, proposedSubgroupsParam, studentId]);
 
   const fetchPreview = async () => {
     try {
       setLoading(true);
       setPreviewLoaded(false);
-      let courseIds = [];
+      let courseIds: string[] = [];
       let selectedSlots = {};
       
       if (courseIdsParam) {
         courseIds = JSON.parse((courseIdsParam as string) || '[]');
         selectedSlots = JSON.parse((selectedSlotsParam as string) || '{}');
       } else {
-        // Fallback for when accessed via tab directly: fetch user's saved registration
-        const dashRes = await fetchDashboardApi((studentId as string) || 'IT21047138');
-        if (dashRes?.success) {
-          const regCourses = dashRes.academics?.courses || dashRes.registration?.courses || [];
-          courseIds = regCourses.map((c: any) => c.courseCode);
+        // Fetch user's actual registered courses
+        if (studentId) {
+          const dashRes = await fetchDashboardApi(studentId).catch(() => null);
+          if (dashRes?.success) {
+            const regCourses = dashRes.academics?.courses || dashRes.registration?.courses || [];
+            courseIds = regCourses.map((c: any) => c.courseCode);
+            selectedSlots = dashRes.academics?.selectedSlots || {};
+          }
+        }
+
+        // If student has no registered courses, do not artificially force courses
+        if (courseIds.length === 0) {
+          setEvents([]);
+          setClashes([]);
+          setHasClashes(false);
+          setPreviewLoaded(true);
+          setLoading(false);
+          return;
         }
       }
+
+      setPreviewCourseIds(courseIds);
+      setPreviewSelectedSlots(selectedSlots as Record<string, string>);
 
       const res = await previewTimetableApi(courseIds, selectedSlots, proposedSubgroups);
       
@@ -100,9 +141,11 @@ export default function TimetablePreviewScreen() {
               room: courseProposal.venue || 'TBA',
             });
           } else if (c.slots && c.slots.length > 0) {
-            const chosenSlotName = selectedSlots[c._id] || selectedSlots[c.courseCode];
+            const slotsMap: Record<string, string> = (selectedSlots || {}) as Record<string, string>;
+            const chosenSlotName = slotsMap[c._id] || slotsMap[c.courseCode];
             let activeSlot = chosenSlotName ? c.slots.find((s: any) => s.slotName === chosenSlotName) : null;
             if (!activeSlot) activeSlot = c.slots[0];
+
 
             if (activeSlot) {
               sessions.push(activeSlot);
@@ -133,6 +176,7 @@ export default function TimetablePreviewScreen() {
               room: session.room || session.venue || 'TBA',
               day: dayStr,
               dayName: session.day,
+              group: session.slotName || null,
               startMinutes,
               endMinutes,
               durationMinutes: Math.max(30, endMinutes - startMinutes),
@@ -176,6 +220,8 @@ export default function TimetablePreviewScreen() {
               endTime: formatPreviewTime(first.endMinutes),
               room1: first.room,
               room2: second.room,
+              course1Group: first.group,
+              course2Group: second.group,
               overlapMinutes: overlapEnd - overlapStart,
             });
           }
@@ -194,13 +240,20 @@ export default function TimetablePreviewScreen() {
 
 
   const handleConfirm = async () => {
+    const effectiveCourseIds = courseIdsParam
+      ? JSON.parse((courseIdsParam as string) || '[]')
+      : previewCourseIds;
+    const effectiveSelectedSlots = selectedSlotsParam
+      ? JSON.parse((selectedSlotsParam as string) || '{}')
+      : previewSelectedSlots;
+
     if (hasClashes) {
       router.replace({
         pathname: '/Student/schedule-conflict',
         params: { 
           studentId, 
-          courseIdsParam, 
-          selectedSlotsParam,
+          courseIdsParam: JSON.stringify(effectiveCourseIds),
+          selectedSlotsParam: JSON.stringify(effectiveSelectedSlots),
           proposedSubgroupsParam,
           clashesParam: JSON.stringify(clashes)
         }
@@ -210,15 +263,21 @@ export default function TimetablePreviewScreen() {
 
     setSubmitting(true);
     try {
-      const courseIds = JSON.parse((courseIdsParam as string) || '[]');
-      const selectedSlots = JSON.parse((selectedSlotsParam as string) || '{}');
+      const courseIds = effectiveCourseIds;
+      const selectedSlots = effectiveSelectedSlots;
       const proposedSubgroups = proposedSubgroupsParam ? JSON.parse(proposedSubgroupsParam as string) : [];
 
       if (proposedSubgroups.length > 0) {
         setSubmitting(false);
         router.replace({
           pathname: '/Student/advisor-request',
-          params: { studentId, proposedSubgroupsParam, previewConfirmed: 'true' }
+          params: {
+            studentId,
+            proposedSubgroupsParam,
+            courseIdsParam: JSON.stringify(courseIds),
+            selectedSlotsParam: JSON.stringify(selectedSlots),
+            previewConfirmed: 'true',
+          }
         });
       } else {
         // Normal registration without clash
@@ -257,7 +316,7 @@ export default function TimetablePreviewScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{isConflictFreePreview ? 'Conflict-Free Timetable Preview' : 'Timetable Preview'}</Text>
         <View style={styles.avatarPlaceholder}>
-          <Text style={styles.avatarText}>AP</Text>
+          <Text style={styles.avatarText}>{initials}</Text>
         </View>
       </View>
 
@@ -364,6 +423,20 @@ export default function TimetablePreviewScreen() {
             <Ionicons name="alert-circle" size={20} color="#D92D20" />
             <Text style={[styles.successBannerText, { color: '#B42318' }]}>Unable to load the timetable preview. Please go back and try again.</Text>
           </View>
+        ) : events.length === 0 ? (
+          <View style={{ alignItems: 'center', padding: 24, backgroundColor: '#F9FAFB', borderRadius: 12, borderWidth: 1, borderColor: '#EAECF0', marginBottom: 16 }}>
+            <Ionicons name="calendar-outline" size={40} color="#98A2B3" />
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#101828', marginTop: 10, marginBottom: 4 }}>No Enrolled Courses</Text>
+            <Text style={{ fontSize: 13, color: '#667085', textAlign: 'center', marginBottom: 16 }}>
+              You do not have any registered courses yet. Select modules from Course Selection to preview your timetable.
+            </Text>
+            <TouchableOpacity
+              style={{ backgroundColor: '#4F46E5', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
+              onPress={() => router.push({ pathname: '/course-selection', params: { studentId } })}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Go to Course Selection</Text>
+            </TouchableOpacity>
+          </View>
         ) : hasClashes ? (
           <View style={[styles.successBanner, { backgroundColor: '#FEF3F2', borderColor: '#FECDCA' }]}>
             <Ionicons name="alert-circle" size={20} color="#D92D20" />
@@ -382,28 +455,30 @@ export default function TimetablePreviewScreen() {
         )}
 
         {/* Action Buttons */}
-        <View style={styles.buttonRow}>
-          <TouchableOpacity 
-            style={styles.primaryButton}
-            onPress={handleConfirm}
-            disabled={submitting || !previewLoaded}
-          >
-            {submitting ? (
-               <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-               <Text style={styles.primaryButtonText}>
-                 {hasClashes
-                   ? 'Resolve Timetable Conflicts'
-                   : isConflictFreePreview
-                     ? 'Confirm & Continue to Advisor Request'
-                     : 'Confirm Registration'}
-               </Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        {events.length > 0 ? (
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={handleConfirm}
+              disabled={submitting || !previewLoaded}
+            >
+              {submitting ? (
+                 <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                 <Text style={styles.primaryButtonText}>
+                   {hasClashes
+                     ? 'Choose Another Group'
+                     : isConflictFreePreview
+                       ? 'Confirm & Continue to Advisor Request'
+                       : 'Confirm Registration'}
+                 </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
       </ScrollView>
-      <FooterTab active="timetable" studentId={(studentId as string) || 'IT21047138'} role="student" />
+      <FooterTab active="timetable" studentId={studentId} role="student" />
     </SafeAreaView>
   );
 }

@@ -40,7 +40,7 @@ async function advisorApiFetch(path: string, options?: RequestInit) {
  * Retrieve all requests (for the Dashboard to filter into tabs).
  */
 export async function getAllRequests() {
-  return advisorApiFetch('/student-requests/all');
+  return advisorApiFetch('/student-requests/all?advisorHistory=true');
 }
 
 /**
@@ -52,7 +52,7 @@ export async function getPendingRequests() {
   // Using the /all endpoint we created
   const allRequests = await getAllRequests();
   if (Array.isArray(allRequests)) {
-    return allRequests.filter((req: any) => req.status === 'PENDING');
+    return allRequests.filter((req: any) => req.workflowStatus === 'PENDING_ADVISOR');
   }
   return [];
 }

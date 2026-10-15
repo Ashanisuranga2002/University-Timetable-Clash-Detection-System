@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchDashboardApi } from '../services/api';
 import { FooterTab } from '../components/FooterTab';
 
@@ -19,13 +20,33 @@ export default function DashboardScreen() {
   const isCompact = width < 430 || height < 860;
 
   const params = useLocalSearchParams();
-  const studentId = (params.studentId as string) || 'IT21047138';
+  const [sessionUser, setSessionUser] = useState<any>(null);
+  const [hasLoadedSession, setHasLoadedSession] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('current_student_user').then((raw) => {
+      if (raw) {
+        try {
+          const u = JSON.parse(raw);
+          setSessionUser(u);
+        } catch {}
+      }
+      setHasLoadedSession(true);
+    });
+  }, []);
+
+  const studentId =
+    (params.studentId as string) ||
+    sessionUser?.studentId ||
+    sessionUser?.userId ||
+    '';
 
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadDashboard = async () => {
+    if (!studentId) return;
     try {
       const res = await fetchDashboardApi(studentId);
       if (res?.success) {
@@ -40,28 +61,46 @@ export default function DashboardScreen() {
   };
 
   useEffect(() => {
-    loadDashboard();
-  }, [studentId]);
+    if (studentId) {
+      loadDashboard();
+    } else if (hasLoadedSession) {
+      setLoading(false);
+    }
+  }, [studentId, hasLoadedSession]);
 
   const onRefresh = () => {
     setRefreshing(true);
     loadDashboard();
   };
 
+  const getInitials = (fullName: string) => {
+    if (!fullName) return 'ST';
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return (parts[0]?.substring(0, 2) || 'ST').toUpperCase();
+  };
+
   const student = dashboardData?.student || {
-    name: 'Alex Perera',
-    studentId: 'IT21047138',
-    programme: 'BSc (Hons) in Information Technology',
-    semester: 3,
-    initials: 'AP',
+    name:
+      sessionUser?.name ||
+      (studentId.toUpperCase().startsWith('IT')
+        ? `Student ${studentId.toUpperCase()}`
+        : 'Student'),
+    studentId: sessionUser?.studentId || sessionUser?.userId || studentId,
+    programme:
+      sessionUser?.programme ||
+      sessionUser?.department ||
+      'Faculty of Computing',
+    semester: sessionUser?.semester || 1,
+    initials: getInitials(sessionUser?.name || studentId),
   };
 
   const academics = dashboardData?.academics || {
-    registeredCount: 4,
-    totalCredits: 16,
+    registeredCount: 0,
+    totalCredits: 0,
     maxCredits: 20,
-    creditPercentage: 80,
-    status: 'confirmed',
+    creditPercentage: 0,
+    status: 'draft',
   };
 
   const clashes = dashboardData?.clashes || {
@@ -73,24 +112,8 @@ export default function DashboardScreen() {
   const scheduleList =
     dashboardData?.schedule && dashboardData.schedule.length > 0
       ? dashboardData.schedule.slice(0, 3)
-      : [
-          {
-            id: '1',
-            time: '09:00 - 11:00 AM',
-            tag: 'LAB',
-            courseCode: 'IT3060',
-            courseName: 'Human Computer Interaction',
-            location: 'Computing Block C • Lab 04',
-          },
-          {
-            id: '2',
-            time: '13:30 - 15:30 PM',
-            tag: 'LECTURE',
-            courseCode: 'IT3040',
-            courseName: 'Cloud Computing Systems',
-            location: 'Main Complex • Hall 3A',
-          },
-        ];
+      : [];
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -456,40 +479,57 @@ export default function DashboardScreen() {
           </Text>
         </View>
 
-        {scheduleList.map((item: any, idx: number) => (
-          <View key={item.id || idx} style={styles.scheduleCard}>
-            <View
-              style={[
-                styles.scheduleAccent,
-                idx % 2 === 1 && styles.scheduleAccentGreen,
-              ]}
-            />
-
-            <View style={styles.scheduleBody}>
-              <View style={styles.scheduleTopRow}>
-                <Text style={styles.scheduleTime}>
-                  {item.day ? `${item.day} • ` : ''}
-                  {item.time}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.scheduleTag,
-                    idx % 2 === 1 && styles.scheduleTagGreen,
-                  ]}
-                >
-                  {item.tag || 'CLASS'}
-                </Text>
-              </View>
-
-              <Text style={styles.scheduleCode}>{item.courseCode}</Text>
-
-              <Text style={styles.scheduleTitle}>{item.courseName}</Text>
-
-              <Text style={styles.scheduleLocation}>{item.location}</Text>
-            </View>
+        {scheduleList.length === 0 ? (
+          <View style={[styles.scheduleCard, { padding: 22, alignItems: 'center', justifyContent: 'center' }]}>
+            <Text style={{ fontSize: 14, color: '#64748B', fontWeight: '600', marginBottom: 4, textAlign: 'center' }}>
+              No Enrolled Schedule Yet
+            </Text>
+            <Text style={{ fontSize: 12, color: '#94A3B8', marginBottom: 14, textAlign: 'center' }}>
+              You haven't enrolled in any courses for this semester.
+            </Text>
+            <TouchableOpacity
+              style={{ backgroundColor: '#4F46E5', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
+              onPress={() => router.push({ pathname: '/course-selection', params: { studentId } })}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '600' }}>Select Courses</Text>
+            </TouchableOpacity>
           </View>
-        ))}
+        ) : (
+          scheduleList.map((item: any, idx: number) => (
+            <View key={item.id || idx} style={styles.scheduleCard}>
+              <View
+                style={[
+                  styles.scheduleAccent,
+                  idx % 2 === 1 && styles.scheduleAccentGreen,
+                ]}
+              />
+
+              <View style={styles.scheduleBody}>
+                <View style={styles.scheduleTopRow}>
+                  <Text style={styles.scheduleTime}>
+                    {item.day ? `${item.day} • ` : ''}
+                    {item.time}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.scheduleTag,
+                      idx % 2 === 1 && styles.scheduleTagGreen,
+                    ]}
+                  >
+                    {item.tag || 'CLASS'}
+                  </Text>
+                </View>
+
+                <Text style={styles.scheduleCode}>{item.courseCode}</Text>
+
+                <Text style={styles.scheduleTitle}>{item.courseName}</Text>
+
+                <Text style={styles.scheduleLocation}>{item.location}</Text>
+              </View>
+            </View>
+          ))
+        )}
 
         <Text style={styles.sectionTitle}>Quick Services</Text>
 

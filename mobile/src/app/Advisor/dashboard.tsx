@@ -1,5 +1,5 @@
 // mobile/src/app/(advisor)/dashboard.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -14,7 +14,10 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getAllRequests } from '@/services/advisorService';
+import { fetchAdvisorCourseDeletionRequestsApi } from '@/services/api';
 import { useFocusEffect } from 'expo-router';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function AdvisorDashboardScreen() {
   const router = useRouter();
@@ -24,13 +27,53 @@ export default function AdvisorDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sessionUser, setSessionUser] = useState<any>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('current_admin_user').then((raw) => {
+      if (raw) {
+        try {
+          setSessionUser(JSON.parse(raw));
+        } catch {}
+      }
+    });
+  }, []);
+
+  const getInitials = (fullName: string) => {
+    if (!fullName) return 'AD';
+    const parts = fullName
+      .replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, '')
+      .trim()
+      .split(/\s+/);
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return (parts[0]?.substring(0, 2) || 'AD').toUpperCase();
+  };
+
+  const advisorName = sessionUser?.name || 'Academic Advisor';
+  const advisorInitials = getInitials(advisorName);
 
   const loadRequests = async () => {
     try {
-      const data = await getAllRequests();
-      if (Array.isArray(data)) {
-        setRequests(data);
-      }
+      const [data, deletionData] = await Promise.all([
+        getAllRequests(),
+        fetchAdvisorCourseDeletionRequestsApi(),
+      ]);
+      const requestList = Array.isArray(data) ? data : data?.requests || data?.data || [];
+      const deletionList = Array.isArray(deletionData)
+        ? deletionData
+        : deletionData?.requests || deletionData?.data || [];
+      const deletionRequests = deletionList.map((item: any) => ({
+        ...item,
+        _id: `course-deletion-${item._id}`,
+        deletionRequestId: item._id,
+        requestType: 'COURSE_DELETION',
+        workflowStatus: item.status === 'PENDING' ? 'PENDING_ADVISOR' : item.status,
+        lastDecision: item.status === 'PENDING' ? 'PENDING' : item.status,
+        courseCode: item.courseId?.courseCode || 'Course Removal',
+        requestedGroup: 'Course removal request',
+        conflictDetails: item.reason || 'Student requested course removal',
+      }));
+      setRequests([...requestList, ...deletionRequests]);
     } catch (error) {
       console.warn("Failed to fetch requests:", error);
     } finally {
@@ -52,7 +95,10 @@ export default function AdvisorDashboardScreen() {
 
   // Filter requests based on the active tab and search query
   const displayedRequests = requests.filter(req => {
-    const matchesTab = req.status === activeTab;
+    const requestStatus = req.workflowStatus === 'PENDING_ADVISOR'
+      ? 'PENDING'
+      : req.lastDecision || req.status;
+    const matchesTab = requestStatus === activeTab;
     const matchesSearch = 
       (req.studentId?.toLowerCase().includes(searchQuery.toLowerCase())) || 
       (req.courseCode?.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -60,11 +106,19 @@ export default function AdvisorDashboardScreen() {
     return matchesTab && matchesSearch;
   });
 
-  const pendingCount = requests.filter(req => req.status === 'PENDING').length;
-  const approvedCount = requests.filter(req => req.status === 'APPROVED').length;
-  const rejectedCount = requests.filter(req => req.status === 'REJECTED').length;
+  const pendingCount = requests.filter(req => req.workflowStatus === 'PENDING_ADVISOR').length;
+  const approvedCount = requests.filter(req => (req.lastDecision || req.status) === 'APPROVED').length;
+  const rejectedCount = requests.filter(req => req.lastDecision === 'REJECTED').length;
 
   const handleReviewPress = (request: any) => {
+    if (request.requestType === 'COURSE_DELETION') {
+      router.push({
+        pathname: '/Advisor/review-course-deletion',
+        params: { requestData: JSON.stringify(request) },
+      });
+      return;
+    }
+
     // Navigate to the Review Request screen
     router.push({
       pathname: '/Advisor/review-request',
@@ -72,23 +126,22 @@ export default function AdvisorDashboardScreen() {
     });
   };
 
-  const getInitials = (id: string) => {
-    if (!id) return 'ST';
-    return id.substring(0, 2).toUpperCase();
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton}>
+        <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/Advisor/profile')}>
           <Ionicons name="menu" size={28} color="#101828" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Advisor Dashboard</Text>
-        <View style={styles.avatarPlaceholder}>
-          <Text style={styles.avatarText}>AD</Text>
+        <TouchableOpacity
+          style={styles.avatarPlaceholder}
+          onPress={() => router.push('/Advisor/profile')}
+          accessibilityLabel="Open profile"
+        >
+          <Text style={styles.avatarText}>{advisorInitials}</Text>
           <View style={styles.statusDot} />
-        </View>
+        </TouchableOpacity>
       </View>
 
       <ScrollView 
@@ -100,9 +153,11 @@ export default function AdvisorDashboardScreen() {
         
         {/* Advisory Portal Overview Banner */}
         <View style={styles.banner}>
-          <View>
-            <Text style={styles.bannerTitle}>Advisory Portal Overview</Text>
-            <Text style={styles.bannerSubtitle}>Resolve module clashes & student requests</Text>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={styles.bannerTitle}>Welcome, {advisorName}</Text>
+            <Text style={styles.bannerSubtitle}>
+              {sessionUser?.department || 'Faculty of Computing'} • Resolve student clashes
+            </Text>
           </View>
           <Ionicons name="ribbon-outline" size={24} color="#FFFFFF" />
         </View>
@@ -220,7 +275,7 @@ export default function AdvisorDashboardScreen() {
                     activeTab === 'APPROVED' ? styles.typeBadgeTextApproved : 
                     activeTab === 'REJECTED' ? styles.typeBadgeTextRejected : {}
                   ]}>
-                    {activeTab === 'PENDING' ? 'SUBGROUP SWAP' : activeTab}
+                    {activeTab === 'PENDING' ? 'STUDENT APPROVAL' : activeTab}
                   </Text>
                 </View>
               </View>
@@ -233,11 +288,11 @@ export default function AdvisorDashboardScreen() {
                 
                 {/* Dynamic Button based on status */}
                 <TouchableOpacity 
-                  style={activeTab === 'PENDING' ? styles.primaryButton : styles.secondaryButton}
-                  onPress={() => handleReviewPress(request)}
+                  style={request.workflowStatus === 'PENDING_ADVISOR' ? styles.primaryButton : styles.secondaryButton}
+                  onPress={() => request.workflowStatus === 'PENDING_ADVISOR' && handleReviewPress(request)}
                 >
                   <Text style={activeTab === 'PENDING' ? styles.primaryButtonText : styles.secondaryButtonText}>
-                    {activeTab === 'PENDING' ? 'Review' : 'Details'}
+                    {request.workflowStatus === 'PENDING_ADVISOR' ? 'Review' : 'Details'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -246,6 +301,7 @@ export default function AdvisorDashboardScreen() {
           ))
         )}
       </ScrollView>
+
     </SafeAreaView>
   );
 }

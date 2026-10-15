@@ -3,15 +3,41 @@ const StudentRequest = require('../models/StudentRequest');
 // CREATE: Submit a new request to change a course group
 exports.createRequest = async (req, res) => {
     try {
-        const { studentId, courseCode, currentGroup, requestedGroup, conflictDetails, reason } = req.body;
-
-        const newRequest = new StudentRequest({
+        const {
             studentId,
             courseCode,
             currentGroup,
             requestedGroup,
             conflictDetails,
-            reason
+            conflictDay,
+            conflictStartTime,
+            conflictEndTime,
+            reason,
+            requestType = 'COORDINATOR_CHANGE',
+            courseIds,
+            selectedSlots,
+        } = req.body;
+
+        if (!['COORDINATOR_CHANGE', 'ADVISOR_APPROVAL'].includes(requestType)) {
+            return res.status(400).json({ message: 'Invalid request type' });
+        }
+
+        const newRequest = new StudentRequest({
+            studentId,
+            courseCode: courseCode?.toUpperCase(),
+            currentGroup,
+            requestedGroup,
+            conflictDetails,
+            conflictDay,
+            conflictStartTime,
+            conflictEndTime,
+            reason,
+            requestType,
+            workflowStatus: requestType === 'ADVISOR_APPROVAL' ? 'PENDING_ADVISOR' : 'PENDING_COORDINATOR',
+            status: 'PENDING',
+            lastDecision: 'PENDING',
+            courseIds: Array.isArray(courseIds) ? courseIds : undefined,
+            selectedSlots: selectedSlots && typeof selectedSlots === 'object' ? selectedSlots : undefined,
         });
 
         const savedRequest = await newRequest.save();
@@ -24,7 +50,33 @@ exports.createRequest = async (req, res) => {
 // READ: View all submitted requests (for Advisor Dashboard)
 exports.getAllRequests = async (req, res) => {
     try {
-        const requests = await StudentRequest.find().sort({ createdAt: -1 });
+        const filter = {};
+        if (req.query.requestType) filter.requestType = req.query.requestType;
+        if (req.query.workflowStatus) filter.workflowStatus = req.query.workflowStatus;
+        if (req.query.advisorHistory === 'true') {
+            // Before workflow stages existed, student subgroup requests went
+            // directly to the advisor. Move those pending records into the
+            // advisor queue so they remain reviewable after this upgrade.
+            await StudentRequest.updateMany(
+                {
+                    requestType: { $exists: false },
+                    workflowStatus: { $exists: false },
+                    status: 'PENDING',
+                },
+                {
+                    $set: {
+                        requestType: 'ADVISOR_APPROVAL',
+                        workflowStatus: 'PENDING_ADVISOR',
+                        lastDecision: 'PENDING',
+                    },
+                }
+            );
+            filter.$or = [
+                { requestType: 'ADVISOR_APPROVAL' },
+                { advisorId: { $exists: true, $ne: '' } },
+            ];
+        }
+        const requests = await StudentRequest.find(filter).sort({ createdAt: -1 });
         res.status(200).json(requests);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching all requests', error: error.message });
@@ -77,7 +129,7 @@ exports.updateRequest = async (req, res) => {
         }
 
         // 2. Enforce the business rule: Only allow updates if the status is PENDING
-        if (request.status !== 'PENDING') {
+        if (request.status !== 'PENDING' || request.workflowStatus !== 'PENDING_COORDINATOR') {
             return res.status(403).json({ 
                 message: `Cannot update request. The advisor has already ${request.status.toLowerCase()} it.` 
             });
@@ -114,9 +166,9 @@ exports.deleteRequest = async (req, res) => {
         }
 
         // 2. Enforce the business rule: Only allow deletion if the status is PENDING
-        if (request.status !== 'PENDING') {
+        if (request.status !== 'PENDING' || request.workflowStatus !== 'PENDING_COORDINATOR') {
             return res.status(403).json({ 
-                message: `Cannot delete request. The advisor has already ${request.status.toLowerCase()} it.` 
+                message: 'This request is already being processed and cannot be deleted.'
             });
         }
 

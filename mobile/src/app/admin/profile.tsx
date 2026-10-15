@@ -25,6 +25,7 @@ import {
 const QUICK_LINKS = [
   { icon: '📚', label: 'Course & Timetables', sub: 'Manage courses, schedules & clashes', route: '/admin-dashboard' },
   { icon: '👥', label: 'User Management', sub: 'Manage system users', route: '/admin/users' },
+  { icon: '🗑️', label: 'Course Removal Requests', sub: 'Approve student course removals', route: '/admin/course-deletion-requests' },
   { icon: '🖥️', label: 'Monitor Management', sub: 'Configure service monitors', route: '/admin/monitors' },
   { icon: '⚠️', label: 'Alert Monitor', sub: 'Review system alerts', route: '/admin/alerts' },
   { icon: '📊', label: 'Service Status', sub: 'View live system health', route: '/admin/service-status' },
@@ -174,6 +175,7 @@ export default function AdminProfileScreen() {
           onPress: async () => {
             try {
               await AsyncStorage.removeItem('current_admin_user');
+              await AsyncStorage.removeItem('current_student_user');
             } catch {
               // ignore
             }

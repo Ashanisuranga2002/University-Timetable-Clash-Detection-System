@@ -14,7 +14,12 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchCoursesApi, fetchDashboardApi, submitRegistrationApi } from '../services/api';
+import {
+  createCourseDeletionRequestApi,
+  fetchCoursesApi,
+  fetchDashboardApi,
+  submitRegistrationApi,
+} from '../services/api';
 import { FooterTab } from '../components/FooterTab';
 
 interface ScheduleItem {
@@ -46,90 +51,59 @@ interface CourseItem {
   slots?: SlotItem[];
 }
 
-const DEFAULT_COURSES: CourseItem[] = [
-  {
-    _id: 'c1',
-    courseCode: 'IT3060',
-    courseName: 'Human Computer Interaction',
-    credits: 4,
-    semester: 3,
-    type: 'Core',
-    lecturer: 'Prof. Diana Jenkins • Dept of Informatics',
-    schedule: [
-      { day: 'Monday', startTime: '09:00', endTime: '12:00', room: 'Auditorium East', type: 'Lecture' },
-      { day: 'Wednesday', startTime: '14:00', endTime: '16:00', room: 'Graphics Lab T-302', type: 'Lab' },
-    ],
-  },
-  {
-    _id: 'c2',
-    courseCode: 'IT3040',
-    courseName: 'Distributed Systems & Cloud',
-    credits: 4,
-    semester: 3,
-    type: 'Core',
-    lecturer: 'Dr. Aaron Vance • Systems Engineering',
-    schedule: [
-      { day: 'Tuesday', startTime: '10:00', endTime: '13:00', room: 'Turing Hall B-201', type: 'Lecture' },
-    ],
-  },
-  {
-    _id: 'c3',
-    courseCode: 'IT3080',
-    courseName: 'Machine Learning Applications',
-    credits: 4,
-    semester: 3,
-    type: 'Elective',
-    lecturer: 'Assoc. Prof. Elena Wu • AI Lab',
-    slots: [
-      { slotName: 'Slot A', day: 'Thursday', startTime: '09:00', endTime: '12:00', room: 'Robotics Center R-12' },
-      { slotName: 'Slot B', day: 'Wednesday', startTime: '14:00', endTime: '17:00', room: 'AI Lab 102' },
-    ],
-  },
-  {
-    _id: 'c4',
-    courseCode: 'IT3090',
-    courseName: 'Mobile Application Development',
-    credits: 4,
-    semester: 3,
-    type: 'Elective',
-    lecturer: 'Lecturer Marcus Lin • Mobile UX',
-    schedule: [
-      { day: 'Friday', startTime: '14:00', endTime: '17:00', room: 'Computing Block C • Lab 04', type: 'Lab' },
-    ],
-  },
-];
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function CourseSelectionScreen() {
   const params = useLocalSearchParams();
-  const studentId = (params.studentId as string) || 'IT21047138';
+  const [sessionUser, setSessionUser] = useState<any>(null);
 
-  const [courses, setCourses] = useState<CourseItem[]>(DEFAULT_COURSES);
+  useEffect(() => {
+    AsyncStorage.getItem('current_student_user').then((raw) => {
+      if (raw) {
+        try {
+          setSessionUser(JSON.parse(raw));
+        } catch {}
+      }
+    });
+  }, []);
+
+  const studentId =
+    (params.studentId as string) ||
+    sessionUser?.studentId ||
+    sessionUser?.userId ||
+    '';
+
+  const [courses, setCourses] = useState<CourseItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'All' | 'Core' | 'Elective'>('All');
 
-  // Enrolled course codes set
-  const [enrolledCodes, setEnrolledCodes] = useState<Set<string>>(
-    new Set(['IT3060', 'IT3040', 'IT3080', 'IT3090'])
-  );
+  // Enrolled course codes set - starts clean and empty for brand new students
+  const [enrolledCodes, setEnrolledCodes] = useState<Set<string>>(new Set());
 
-  // Selected slots for courses with slot choices (e.g. IT3080 -> Slot B for testing conflicts)
-  const [selectedSlots, setSelectedSlots] = useState<Record<string, string>>({
-    IT3080: 'Slot B',
-  });
+  // Selected slots for courses with slot choices
+  const [selectedSlots, setSelectedSlots] = useState<Record<string, string>>({});
 
   const [saving, setSaving] = useState(false);
 
+  const getInitials = (name: string) => {
+    const parts = (name || 'Student').trim().split(/\s+/);
+    return parts.map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+  };
+
   const loadCoursesAndRegistration = async () => {
     try {
-      const [courseRes, dashRes] = await Promise.all([
-        fetchCoursesApi(),
-        fetchDashboardApi(studentId).catch(() => null),
-      ]);
+      setLoadError('');
+      const dashRes = studentId ? await fetchDashboardApi(studentId).catch(() => null) : null;
+      const courseRes = await fetchCoursesApi();
 
-      if (courseRes?.success && Array.isArray(courseRes.courses) && courseRes.courses.length > 0) {
+      if (courseRes?.success && Array.isArray(courseRes.courses)) {
         setCourses(courseRes.courses);
+      } else {
+        setCourses([]);
+        setLoadError('The course catalogue is not available right now.');
       }
 
       const regCourses = dashRes?.academics?.courses || dashRes?.registration?.courses;
@@ -138,12 +112,15 @@ export default function CourseSelectionScreen() {
         regCourses.forEach((c: any) => {
           if (c.courseCode) enrolled.add(c.courseCode);
         });
-        if (enrolled.size > 0) {
-          setEnrolledCodes(enrolled);
-        }
+        setEnrolledCodes(enrolled);
+        setSelectedSlots(dashRes.academics?.selectedSlots || {});
+      } else if (dashRes?.success) {
+        setEnrolledCodes(new Set());
+        setSelectedSlots({});
       }
     } catch (e) {
-      // Fallback stays in place
+      setCourses([]);
+      setLoadError('Unable to load courses. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -152,7 +129,7 @@ export default function CourseSelectionScreen() {
 
   useEffect(() => {
     loadCoursesAndRegistration();
-  }, [studentId]);
+  }, [studentId, sessionUser?.semester]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -212,11 +189,44 @@ export default function CourseSelectionScreen() {
   const totalCredits = useMemo(() => {
     return courses
       .filter((c) => enrolledCodes.has(c.courseCode))
-      .reduce((sum, c) => sum + (c.credits || 4), 0);
+      .reduce((sum, c) => sum + (c.credits || 0), 0);
   }, [courses, enrolledCodes]);
 
-  const hasSlotBConflict =
-    enrolledCodes.has('IT3080') && selectedSlots['IT3080'] === 'Slot B';
+  const timeToMinutes = (value: string) => {
+    const [hours, minutes = '0'] = value.split(':');
+    return Number(hours) * 60 + Number(minutes);
+  };
+
+  const hasConflict = (candidate: CourseItem, slotName?: string) => {
+    const candidateSessions = [
+      ...(candidate.schedule || []),
+      ...((candidate.slots || [])
+        .filter((slot) => !slotName || slot.slotName === slotName)
+        .slice(0, 1)),
+    ];
+
+    return courses.some((other) => {
+      if (other.courseCode === candidate.courseCode || !enrolledCodes.has(other.courseCode)) return false;
+      const otherSlotName = selectedSlots[other.courseCode] || other.slots?.[0]?.slotName;
+      const otherSessions = [
+        ...(other.schedule || []),
+        ...((other.slots || [])
+          .filter((slot) => !otherSlotName || slot.slotName === otherSlotName)
+          .slice(0, 1)),
+      ];
+
+      return candidateSessions.some((left) => otherSessions.some((right) => {
+        if (!left.day || !right.day || left.day.toLowerCase() !== right.day.toLowerCase()) return false;
+        return Math.max(timeToMinutes(left.startTime), timeToMinutes(right.startTime)) <
+          Math.min(timeToMinutes(left.endTime), timeToMinutes(right.endTime));
+      }));
+    });
+  };
+
+  const hasAnyConflict = courses.some((course) =>
+    enrolledCodes.has(course.courseCode) &&
+    hasConflict(course, selectedSlots[course.courseCode] || course.slots?.[0]?.slotName)
+  );
 
   const handleSaveRegistration = () => {
     const enrolledArray = Array.from(enrolledCodes);
@@ -231,9 +241,46 @@ export default function CourseSelectionScreen() {
       params: { 
         studentId, 
         courseIdsParam: JSON.stringify(enrolledArray),
-        selectedSlotsParam: JSON.stringify(selectedSlots)
+        selectedSlotsParam: JSON.stringify(
+          courses.reduce((slots, course) => {
+            if (enrolledCodes.has(course.courseCode) && course.slots?.length) {
+              slots[course.courseCode] = selectedSlots[course.courseCode] || course.slots[0].slotName;
+            }
+            return slots;
+          }, {} as Record<string, string>)
+        )
       },
     });
+  };
+
+  const handleRequestCourseDeletion = (course: CourseItem) => {
+    if (!enrolledCodes.has(course.courseCode)) return;
+
+    Alert.alert(
+      'Request Course Removal',
+      `Send ${course.courseCode} to an administrator for removal approval?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send Request',
+          onPress: async () => {
+            try {
+              const response = await createCourseDeletionRequestApi(
+                studentId,
+                course._id,
+                'Student requested removal from the current registration.'
+              );
+              if (!response?.success) {
+                throw new Error(response?.message || 'Request could not be submitted');
+              }
+              Alert.alert('Request Submitted', 'An administrator must approve this course removal.');
+            } catch (error: any) {
+              Alert.alert('Request Failed', error.message || 'Unable to submit the request.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -271,7 +318,7 @@ export default function CourseSelectionScreen() {
             }
             activeOpacity={0.8}
           >
-            <Text style={styles.avatarText}>AP</Text>
+            <Text style={styles.avatarText}>{getInitials(sessionUser?.name || studentId)}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -344,10 +391,10 @@ export default function CourseSelectionScreen() {
               <Text style={styles.loadTitle}>Academic Load</Text>
             </View>
 
-            <View style={hasSlotBConflict ? styles.conflictBadge : styles.optimalBadge}>
-              <View style={hasSlotBConflict ? styles.redDot : styles.greenDot} />
-              <Text style={hasSlotBConflict ? styles.conflictBadgeText : styles.optimalText}>
-                {hasSlotBConflict ? 'Clash Detected' : 'Optimal Load'}
+          <View style={hasAnyConflict ? styles.conflictBadge : styles.optimalBadge}>
+              <View style={hasAnyConflict ? styles.redDot : styles.greenDot} />
+              <Text style={hasAnyConflict ? styles.conflictBadgeText : styles.optimalText}>
+                {hasAnyConflict ? 'Clash Detected' : 'Optimal Load'}
               </Text>
             </View>
           </View>
@@ -366,7 +413,7 @@ export default function CourseSelectionScreen() {
                 styles.progressFill,
                 {
                   width: `${Math.min((totalCredits / 20) * 100, 100)}%`,
-                  backgroundColor: hasSlotBConflict ? '#EF4444' : '#4F46E5',
+                  backgroundColor: hasAnyConflict ? '#EF4444' : '#4F46E5',
                 },
               ]}
             />
@@ -388,9 +435,9 @@ export default function CourseSelectionScreen() {
         ) : filteredCourses.length === 0 ? (
           <View style={styles.emptyWrap}>
             <Ionicons name="book-outline" size={42} color="#CBD5E1" />
-            <Text style={styles.emptyTitle}>No courses found</Text>
+            <Text style={styles.emptyTitle}>{loadError || 'No courses found'}</Text>
             <Text style={styles.emptySub}>
-              Try adjusting your search query or switching filters.
+              {loadError ? 'Refresh the page or contact your coordinator.' : 'Try adjusting your search query or switching filters.'}
             </Text>
           </View>
         ) : (
@@ -398,7 +445,7 @@ export default function CourseSelectionScreen() {
             const isEnrolled = enrolledCodes.has(course.courseCode);
             const isCore = course.type === 'Core';
             const hasSlots = course.slots && course.slots.length > 0;
-            const curSlot = selectedSlots[course.courseCode] || 'Slot A';
+            const curSlot = selectedSlots[course.courseCode] || course.slots?.[0]?.slotName;
 
             return (
               <View key={course._id || course.courseCode} style={styles.courseCard}>
@@ -410,7 +457,7 @@ export default function CourseSelectionScreen() {
                         {course.type.toUpperCase()}
                       </Text>
                     </View>
-                    <Text style={styles.courseCredits}>{course.credits || 4}.0 cr</Text>
+                    <Text style={styles.courseCredits}>{course.credits || 0}.0 cr</Text>
                   </View>
 
                   {/* Enrollment action button / status */}
@@ -450,6 +497,17 @@ export default function CourseSelectionScreen() {
                   {course.courseCode} {course.courseName}
                 </Text>
 
+                {isEnrolled ? (
+                  <TouchableOpacity
+                    style={styles.deleteRequestButton}
+                    onPress={() => handleRequestCourseDeletion(course)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="remove-circle-outline" size={16} color="#B42318" />
+                    <Text style={styles.deleteRequestText}>Request course removal</Text>
+                  </TouchableOpacity>
+                ) : null}
+
                 {/* Lecturer info */}
                 {course.lecturer ? (
                   <Text style={styles.lecturer}>{course.lecturer}</Text>
@@ -460,7 +518,7 @@ export default function CourseSelectionScreen() {
                   <View style={styles.slotsWrapper}>
                     {course.slots!.map((slot) => {
                       const isSelected = curSlot === slot.slotName;
-                      const isClash = slot.slotName === 'Slot B' && course.courseCode === 'IT3080';
+                      const isClash = hasConflict(course, slot.slotName);
 
                       return (
                         <TouchableOpacity
@@ -482,7 +540,7 @@ export default function CourseSelectionScreen() {
                               {slot.slotName}: {slot.day} {slot.startTime} - {slot.endTime}
                             </Text>
                             <Text style={styles.slotRoom}>
-                              {slot.room} {isClash ? '• Clash with IT3060 Lab' : '• Optimal'}
+                              {slot.room} {isClash ? '• Timetable conflict' : '• No conflict'}
                             </Text>
                           </View>
 
@@ -900,6 +958,26 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     lineHeight: 20,
     marginBottom: 4,
+  },
+
+  deleteRequestButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFF5F4',
+    borderWidth: 1,
+    borderColor: '#FECDCA',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginBottom: 8,
+  },
+
+  deleteRequestText: {
+    color: '#B42318',
+    fontSize: 12,
+    fontWeight: '800',
   },
   lecturer: {
     fontSize: 12,

@@ -23,14 +23,29 @@ import {
   getReviewByRequestId
 } from '@/services/advisorService';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 export default function ReviewRequestScreen() {
   const router = useRouter();
   const { requestData } = useLocalSearchParams();
   const [submitting, setSubmitting] = useState(false);
   const [loadingDraft, setLoadingDraft] = useState(true);
+  const [sessionUser, setSessionUser] = useState<any>(null);
   
   const [comments, setComments] = useState('');
   const [draftId, setDraftId] = useState<string | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('current_admin_user').then((raw) => {
+      if (raw) {
+        try {
+          setSessionUser(JSON.parse(raw));
+        } catch {}
+      }
+    });
+  }, []);
+
+  const advisorId = sessionUser?.adminId || sessionUser?.userId || 'ADV001';
 
   let request: any = null;
   if (requestData) {
@@ -73,7 +88,7 @@ export default function ReviewRequestScreen() {
         await updateReviewDraft(draftId, comments, 'PENDING');
         Alert.alert('Saved', 'Your draft has been updated.');
       } else {
-        const response = await createReviewDraft(request._id, 'ADV-01', comments);
+        const response = await createReviewDraft(request._id, advisorId, comments);
         if (response && response.review && response.review._id) {
           setDraftId(response.review._id);
         }
@@ -105,9 +120,9 @@ export default function ReviewRequestScreen() {
     setSubmitting(true);
     try {
       if (decision === 'APPROVED') {
-        await approveRequest(request._id, 'ADV-01', comments || 'Request Approved');
+        await approveRequest(request._id, advisorId, comments || 'Request Approved');
       } else {
-        await rejectRequest(request._id, 'ADV-01', comments || 'Request Rejected');
+        await rejectRequest(request._id, advisorId, comments || 'Request Rejected');
       }
       
       Alert.alert('Success', `Request has been ${decision.toLowerCase()} successfully.`);
@@ -135,7 +150,7 @@ export default function ReviewRequestScreen() {
     return id.substring(0, 2).toUpperCase();
   };
 
-  const isPending = request.status === 'PENDING';
+  const isPending = request.workflowStatus === 'PENDING_ADVISOR';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -198,7 +213,11 @@ export default function ReviewRequestScreen() {
                   </View>
                 </View>
                 <Text style={styles.courseText}>{request.courseCode} • {request.requestedGroup}</Text>
-                <Text style={styles.timeText}>Requested Swap</Text>
+                <Text style={styles.timeText}>
+                  {request.proposedDay
+                    ? `${request.proposedDay} ${request.proposedStartTime}–${request.proposedEndTime} • ${request.proposedVenue || 'TBA'}`
+                    : 'Requested Swap'}
+                </Text>
                 <View style={styles.statusRow}>
                   <Ionicons name="checkmark" size={14} color="#027A48" />
                   <Text style={styles.noConflictText}>No Conflict</Text>

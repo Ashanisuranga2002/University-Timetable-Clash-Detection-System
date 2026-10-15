@@ -41,18 +41,63 @@ const STUDENT_TABS: TabItem[] = [
   { key: 'profile', label: 'Profile', iconName: 'person', iconOutline: 'person-outline' },
 ];
 
-export function FooterTab({ active, studentId = 'IT21047138', adminId, advisorId = 'ADV-01', role = 'student' }: FooterTabProps) {
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export function FooterTab({
+  active,
+  studentId: propStudentId,
+  adminId: propAdminId,
+  advisorId: propAdvisorId,
+  role = 'student',
+}: FooterTabProps) {
+  const [sessionStudentId, setSessionStudentId] = React.useState<string>('');
+  const [sessionAdminId, setSessionAdminId] = React.useState<string>('');
+
+  React.useEffect(() => {
+    let activeEffect = true;
+    AsyncStorage.getItem('current_student_user').then((raw) => {
+      if (!activeEffect || !raw) return;
+      try {
+        const u = JSON.parse(raw);
+        if (u?.studentId || u?.userId) {
+          setSessionStudentId(u.studentId || u.userId);
+        }
+      } catch {}
+    });
+
+    AsyncStorage.getItem('current_admin_user').then((raw) => {
+      if (!activeEffect || !raw) return;
+      try {
+        const u = JSON.parse(raw);
+        if (u?.adminId || u?.userId) {
+          setSessionAdminId(u.adminId || u.userId);
+        }
+      } catch {}
+    });
+
+    return () => {
+      activeEffect = false;
+    };
+  }, []);
+
+  const studentId = propStudentId || sessionStudentId || '';
+  const adminId = propAdminId || sessionAdminId || '';
+  const advisorId = propAdvisorId || sessionAdminId || '';
+
   const tabs = role === 'admin' ? ADMIN_TABS : role === 'advisor' ? ADVISOR_TABS : STUDENT_TABS;
   const navigate = (key: TabName) => {
     if (key === active) return;
     
     if (role === 'admin') {
+      const targetParams: any = { role: 'admin' };
+      if (adminId) targetParams.adminId = adminId;
+
       if (key === 'dashboard') {
-        router.push({ pathname: '/admin-dashboard', params: { adminId } });
+        router.push({ pathname: '/admin-dashboard', params: targetParams });
       } else if (key === 'profile') {
-        router.push({ pathname: '/profile', params: { adminId, role: 'admin' } });
+        router.push({ pathname: '/profile', params: targetParams });
       } else {
-        router.push({ pathname: '/admin-dashboard', params: { adminId } });
+        router.push({ pathname: '/admin-dashboard', params: targetParams });
       }
       return;
     }
@@ -60,13 +105,15 @@ export function FooterTab({ active, studentId = 'IT21047138', adminId, advisorId
     if (role === 'advisor') {
       const advisorPathMap: Record<TabName, string> = {
         dashboard: '/Advisor/dashboard',
-        timetable: '/Advisor/dashboard', // Placeholder for schedule
-        requests: '/Advisor/dashboard',  // Dashboard handles requests
+        timetable: '/Advisor/dashboard',
+        requests: '/Advisor/dashboard',
         profile: '/Advisor/profile',
         courses: '/Advisor/dashboard',
         clashes: '/Advisor/dashboard',
       };
-      router.push({ pathname: advisorPathMap[key] as any, params: { advisorId, role: 'advisor' } });
+      const targetParams: any = { role: 'advisor' };
+      if (advisorId) targetParams.advisorId = advisorId;
+      router.push({ pathname: advisorPathMap[key] as any, params: targetParams });
       return;
     }
 
@@ -79,7 +126,9 @@ export function FooterTab({ active, studentId = 'IT21047138', adminId, advisorId
       requests: '/Student/requests',
       profile: '/profile',
     };
-    router.push({ pathname: pathMap[key] as any, params: { studentId, role: 'student' } });
+    const targetParams: any = { role: 'student' };
+    if (studentId) targetParams.studentId = studentId;
+    router.push({ pathname: pathMap[key] as any, params: targetParams });
   };
 
   return (
