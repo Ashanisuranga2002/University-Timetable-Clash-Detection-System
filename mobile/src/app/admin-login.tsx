@@ -86,24 +86,6 @@ export default function AdminLoginScreen() {
       return;
     }
 
-    const upperId = id.toUpperCase();
-    if (selectedRole === 'Student' && !upperId.startsWith('IT')) {
-      setErrorMsg('Student ID must start with "IT".');
-      return;
-    }
-    if (selectedRole === 'Advisor' && !upperId.startsWith('AD')) {
-      setErrorMsg('Advisor ID must start with "AD".');
-      return;
-    }
-    if (selectedRole === 'Coordinator' && !upperId.startsWith('CO')) {
-      setErrorMsg('Coordinator ID must start with "CO".');
-      return;
-    }
-    if (selectedRole === 'Admin' && !upperId.startsWith('AD')) {
-      setErrorMsg('Admin ID must start with "AD".');
-      return;
-    }
-
     setLoading(true);
     setErrorMsg('');
 
@@ -113,16 +95,18 @@ export default function AdminLoginScreen() {
         const staffRes = await loginAdminApi(id, password);
         if (staffRes?.success) {
           await saveOrClearCredentials(id, password);
+          await AsyncStorage.removeItem('current_student_user');
           if (staffRes.admin) {
             await AsyncStorage.setItem('current_admin_user', JSON.stringify(staffRes.admin));
           }
-          if (selectedRole === 'Advisor' || staffRes.admin?.role === 'Academic Advisor') {
+          const staffRole = (staffRes.admin?.role || '').toLowerCase();
+          if (staffRole.includes('advisor') || selectedRole === 'Advisor') {
             router.replace('/Advisor/dashboard' as any);
-          } else if (selectedRole === 'Coordinator' || staffRes.admin?.role === 'Coordinator') {
+          } else if (staffRole.includes('coordinator') || selectedRole === 'Coordinator') {
             router.replace('/coordinator-dashboard' as any);
           } else {
             router.replace({
-              pathname: '/admin',
+              pathname: '/admin-dashboard',
               params: {
                 adminId: staffRes.admin?.adminId || id,
                 adminName: staffRes.admin?.name || 'Administrator',
@@ -150,10 +134,10 @@ export default function AdminLoginScreen() {
       } else {
         // Admin fallback
         router.replace({
-          pathname: '/admin',
+          pathname: '/admin-dashboard',
           params: {
             adminId: id,
-            adminName: 'Dr. Sarah Mitchell',
+            adminName: 'Administrator',
             adminRole: 'Administrator',
             adminDept: 'Academic Affairs',
           },

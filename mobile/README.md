@@ -1,56 +1,52 @@
-# Welcome to your Expo app 👋
+# 📱 University Timetable & Clash Detection System — Mobile App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+> Cross-platform mobile client built with React Native and Expo SDK 57.
 
-## Get started
+[![React Native](https://img.shields.io/badge/React%20Native-0.86-61DAFB?style=flat-square&logo=react&logoColor=black)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-SDK%2057-000020?style=flat-square&logo=expo&logoColor=white)](https://expo.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## 📱 Features
 
-2. Start the app
+- **Multi-Role Portal**: Dedicated, polished interfaces for Students, Academic Advisors, Course Coordinators, and System Admins.
+- **Dynamic Clash Detection UI**: Color-coded timetable conflict visualization and instant alternative subgroup selection.
+- **Advisor Review Interface**: Review incoming student clash requests, draft notes, and submit formal approvals.
+- **Admin Control Center**: Monitor infrastructure services, examine incident alerts, and manage user accounts.
+- **Smart Network Resolution**: Dynamic host auto-discovery for seamless connectivity between physical devices (Expo Go) and local backend APIs.
 
-   ```bash
-   npx expo start
-   ```
+---
 
-In the output, you'll find options to open the app in a
+## 🚀 Quick Setup
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+### 1. Install Dependencies
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2. Verify Backend Host IP
+If testing on a physical smartphone using **Expo Go**, verify that your phone and development computer are on the same local Wi-Fi. The app auto-detects your debugger host IP, or you can configure `LOCAL_IP` in [`src/services/api.ts`](src/services/api.ts).
 
-### Other setup steps
+### 3. Start Expo Dev Server
+```bash
+npx expo start
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+* **Physical Device**: Scan the terminal QR code via **Expo Go** (Android) or **Camera** (iOS).
+* **Android Emulator**: Press `a`.
+* **iOS Simulator**: Press `i`.
+* **Web Browser**: Press `w`.
 
-## Learn more
+---
 
-To learn more about developing your project with Expo, look at the following resources:
+## 🧪 Linting & Quality Checks
+```bash
+# Typecheck
+npx tsc --noEmit
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+# Lint
+npx expo lint
+```
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+For full documentation and pre-seeded test accounts, refer to the [Root README](../README.md).

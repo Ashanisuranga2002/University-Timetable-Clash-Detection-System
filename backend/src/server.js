@@ -16,6 +16,9 @@ const adminUserRoutes = require("./routes/admin.user.routes");
 const adminMonitorRoutes = require("./routes/admin.monitor.routes");
 const adminAlertRoutes = require("./routes/admin.alert.routes");
 const adminSystemHealthRoutes = require("./routes/admin.systemHealth.routes");
+const courseDeletionRoutes = require("./routes/courseDeletion.routes");
+const adminCourseDeletionRoutes = require("./routes/admin.courseDeletion.routes");
+const advisorCourseDeletionRoutes = require("./routes/advisor.courseDeletion.routes");
 const coordinatorRoutes = require("./routes/coordinator.routes");
 const adminAuth = require("./middleware/adminAuth");
 
@@ -37,9 +40,12 @@ app.use("/api/admin/users", adminAuth, adminUserRoutes);
 app.use("/api/admin/monitors", adminAuth, adminMonitorRoutes);
 app.use("/api/admin/alerts", adminAuth, adminAlertRoutes);
 app.use("/api/admin/system-health", adminAuth, adminSystemHealthRoutes);
+app.use("/api/course-deletion-requests", courseDeletionRoutes);
+app.use("/api/admin/course-deletion-requests", adminAuth, adminCourseDeletionRoutes);
 
 app.use('/api/student-requests', studentRequestRoutes);
 app.use('/api/advisor-reviews', advisorReviewRoutes);
+app.use('/api/advisor/course-deletion-requests', advisorCourseDeletionRoutes);
 app.use('/api/coordinator', coordinatorRoutes);
 
 app.get("/", (req, res) => {

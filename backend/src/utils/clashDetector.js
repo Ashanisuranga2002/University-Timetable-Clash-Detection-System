@@ -54,6 +54,7 @@ function detectClashes(courses, selectedSlots = {}) {
           endTime: activeSlot.endTime.trim(),
           room: activeSlot.room || "TBA",
           sessionType: activeSlot.slotName || "Slot",
+          groupName: activeSlot.slotName,
         });
       }
     }
@@ -93,6 +94,8 @@ function detectClashes(courses, selectedSlots = {}) {
             endTime: s1.endTime,
             room1: s1.room,
             room2: s2.room,
+            course1Group: s1.groupName || null,
+            course2Group: s2.groupName || null,
             overlapMinutes,
           });
         }

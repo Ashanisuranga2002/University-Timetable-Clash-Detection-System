@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,12 +28,32 @@ type StudentRequest = {
   requestedGroup: string;
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  requestType?: 'COORDINATOR_CHANGE' | 'ADVISOR_APPROVAL' | string;
+  workflowStatus?: string;
+  lastDecision?: string;
+  proposedDay?: string;
+  proposedStartTime?: string;
+  proposedEndTime?: string;
   createdAt?: string;
 };
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 export default function StudentRequestsScreen() {
   const { studentId: studentIdParam } = useLocalSearchParams();
-  const studentId = (studentIdParam as string) || 'IT21047138';
+  const [sessionUser, setSessionUser] = useState<any>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('current_student_user').then((raw) => {
+      if (raw) {
+        try {
+          setSessionUser(JSON.parse(raw));
+        } catch {}
+      }
+    });
+  }, []);
+
+  const studentId = (studentIdParam as string) || sessionUser?.studentId || sessionUser?.userId || '';
   const [requests, setRequests] = useState<StudentRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -118,6 +138,12 @@ export default function StudentRequestsScreen() {
     return styles.pendingBadge;
   };
 
+  const getDisplayStatus = (request: StudentRequest) => {
+    if (request.workflowStatus === 'PENDING_COORDINATOR') return 'COORDINATOR REVIEW';
+    if (request.workflowStatus === 'PENDING_ADVISOR') return 'ADVISOR REVIEW';
+    return request.lastDecision || request.status || 'PENDING';
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -152,18 +178,24 @@ export default function StudentRequestsScreen() {
               <Text style={styles.emptyText}>Alternative subgroup requests you submit will appear here.</Text>
             </View>
           ) : requests.map(request => {
-            const isPending = request.status === 'PENDING';
+            const isPending = request.status === 'PENDING' && request.workflowStatus === 'PENDING_COORDINATOR';
+            const displayStatus = getDisplayStatus(request);
             return (
               <View key={request._id} style={styles.requestCard}>
                 <View style={styles.cardTopRow}>
                   <View style={styles.courseBadge}><Text style={styles.courseBadgeText}>{request.courseCode}</Text></View>
-                  <View style={[styles.statusBadge, statusStyle(request.status)]}>
-                    <Text style={styles.statusText}>{request.status || 'PENDING'}</Text>
+                  <View style={[styles.statusBadge, statusStyle(request.lastDecision === 'REJECTED' ? 'REJECTED' : request.status)]}>
+                    <Text style={styles.statusText}>{displayStatus}</Text>
                   </View>
                 </View>
                 <Text style={styles.groupChange}>{request.currentGroup || 'Current group'} <Ionicons name="arrow-forward" size={14} color="#667085" /> {request.requestedGroup}</Text>
                 <Text style={styles.reasonLabel}>Reason</Text>
                 <Text style={styles.reasonText}>{request.reason}</Text>
+                {request.proposedDay ? (
+                  <Text style={styles.dateText}>
+                    Proposed slot: {request.proposedDay} {request.proposedStartTime}–{request.proposedEndTime}
+                  </Text>
+                ) : null}
                 {request.createdAt ? <Text style={styles.dateText}>{new Date(request.createdAt).toLocaleDateString()}</Text> : null}
 
                 {isPending ? (

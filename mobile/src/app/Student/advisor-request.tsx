@@ -18,13 +18,15 @@ import { FooterTab } from '@/components/FooterTab';
 
 export default function AdvisorRequestScreen() {
   const router = useRouter();
-  const { studentId, proposedSubgroupsParam, previewConfirmed } = useLocalSearchParams();
+  const { studentId, proposedSubgroupsParam, previewConfirmed, courseIdsParam, selectedSlotsParam } = useLocalSearchParams();
   
   const [reason, setReason] = useState('I had a timetable conflict and selected this alternative subgroup to resolve it.');
   const [submitting, setSubmitting] = useState(false);
 
   const proposedSubgroups = proposedSubgroupsParam ? JSON.parse(proposedSubgroupsParam as string) : [];
   const proposal = proposedSubgroups.length > 0 ? proposedSubgroups[0] : null;
+  const requestType = proposal?.requestType || 'ADVISOR_APPROVAL';
+  const sendsToCoordinator = requestType === 'COORDINATOR_CHANGE';
   const canSubmitRequest = previewConfirmed === 'true' && !!proposal;
 
   const handleSubmit = async () => {
@@ -43,10 +45,18 @@ export default function AdvisorRequestScreen() {
       const response = await submitAlternativeSubgroupRequest(
         studentId as string,
         proposal.courseCode,
-        'Original Group', // We don't necessarily have the original group stored, just pass a placeholder
+        proposal.currentGroup || 'Current schedule',
         proposal.groupName,
-        'Timetable Conflict Detected', // conflictDetails
-        reason
+        `Timetable conflict for ${proposal.courseCode}`,
+        reason,
+        requestType,
+        {
+          courseIds: courseIdsParam ? JSON.parse(courseIdsParam as string) : undefined,
+          selectedSlots: selectedSlotsParam ? JSON.parse(selectedSlotsParam as string) : undefined,
+          conflictDay: proposal.replaceSession?.day,
+          conflictStartTime: proposal.replaceSession?.startTime,
+          conflictEndTime: proposal.replaceSession?.endTime,
+        }
       );
       if (!response) {
         throw new Error(response?.message || 'Request could not be submitted.');
@@ -54,12 +64,17 @@ export default function AdvisorRequestScreen() {
       
       Alert.alert(
         'Request Submitted', 
-        'Your request has been sent to your advisor for review.',
+        sendsToCoordinator
+          ? 'Your request has been sent to the coordinator. After a subgroup is assigned, it will move to your advisor for approval.'
+          : 'Your selected subgroup request has been sent to your academic advisor for approval.',
         [{ text: 'OK', onPress: () => router.replace({ pathname: '/Student/requests', params: { studentId } }) }]
       );
     } catch (err) {
       console.warn(err);
-      Alert.alert('Error', 'Failed to submit request to advisor.');
+      Alert.alert(
+        'Error',
+        sendsToCoordinator ? 'Failed to submit request to coordinator.' : 'Failed to submit request to advisor.'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -75,7 +90,7 @@ export default function AdvisorRequestScreen() {
             <Text style={styles.submitBtnText}>Return to timetable</Text>
           </TouchableOpacity>
         </View>
-        <FooterTab active="requests" studentId={(studentId as string) || 'IT21047138'} role="student" />
+        <FooterTab active="requests" studentId={studentId as string} role="student" />
       </SafeAreaView>
     );
   }
@@ -90,7 +105,7 @@ export default function AdvisorRequestScreen() {
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={20} color="#101828" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Advisor Approval</Text>
+          <Text style={styles.headerTitle}>{sendsToCoordinator ? 'Coordinator Resolution' : 'Advisor Approval'}</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -100,7 +115,9 @@ export default function AdvisorRequestScreen() {
               <Ionicons name="document-text-outline" size={24} color="#4A3AFF" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.infoTitle}>Review Request</Text>
+              <Text style={styles.infoTitle}>
+                {sendsToCoordinator ? 'Request a new timetable slot' : 'Request subgroup approval'}
+              </Text>
               <Text style={styles.infoSub}>
                 You are requesting to change your {proposal.courseCode} subgroup to <Text style={{fontWeight: '700'}}>{proposal.groupName}</Text> to resolve a timetable conflict.
               </Text>
@@ -121,7 +138,9 @@ export default function AdvisorRequestScreen() {
           <View style={styles.noticeBox}>
             <Ionicons name="information-circle-outline" size={18} color="#026AA2" />
             <Text style={styles.noticeText}>
-              Your request will be reviewed by your academic advisor. You will be notified once a decision has been made.
+              {sendsToCoordinator
+                ? 'The coordinator will assign a configured, conflict-free subgroup and forward it to your academic advisor for approval.'
+                : 'Your selected conflict-free subgroup will be reviewed by your academic advisor.'}
             </Text>
           </View>
         </View>
@@ -135,12 +154,14 @@ export default function AdvisorRequestScreen() {
             {submitting ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.submitBtnText}>Submit Request to Advisor</Text>
+              <Text style={styles.submitBtnText}>
+                {sendsToCoordinator ? 'Submit to Coordinator' : 'Submit to Advisor'}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-      <FooterTab active="requests" studentId={(studentId as string) || 'IT21047138'} role="student" />
+      <FooterTab active="requests" studentId={studentId as string} role="student" />
     </SafeAreaView>
   );
 }

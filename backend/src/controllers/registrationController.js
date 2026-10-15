@@ -1,16 +1,79 @@
 const Registration = require("../models/Registration");
-const Student = require("../models/Student");
 const Course = require("../models/Course");
 const Clash = require("../models/Clash");
 const StudentRequest = require("../models/StudentRequest");
+const CourseGroup = require("../models/CourseGroup");
 const { detectClashes } = require("../utils/clashDetector");
+const { resolveStudent } = require("../utils/studentResolver");
+
+const applyApprovedSubgroup = async (request) => {
+  const student = await resolveStudent(request.studentId);
+  if (!student) {
+    throw new Error("Student not found");
+  }
+
+  const subgroup = request.proposedSubgroupId
+    ? await CourseGroup.findById(request.proposedSubgroupId)
+    : await CourseGroup.findOne({
+        courseCode: request.courseCode.toUpperCase(),
+        groupName: request.requestedGroup,
+      });
+
+  if (!subgroup) {
+    throw new Error("Approved subgroup was not found");
+  }
+
+  const registration = await Registration.findOne({
+    student: student._id,
+    semester: student.semester,
+  }).populate("courses");
+
+  if (!registration) {
+    throw new Error("Student registration was not found");
+  }
+
+  const selectedSlots = registration.selectedSlots instanceof Map
+    ? registration.selectedSlots
+    : new Map(Object.entries(registration.selectedSlots || {}));
+
+  selectedSlots.set(request.courseCode.toUpperCase(), subgroup.groupName);
+  registration.selectedSlots = selectedSlots;
+
+  const courses = registration.courses || [];
+  const selectedSlotObject = Object.fromEntries(selectedSlots.entries());
+  const remainingClashes = detectClashes(courses, selectedSlotObject);
+
+  await Clash.deleteMany({ student: student._id });
+
+  for (const clash of remainingClashes) {
+    await Clash.create({
+      student: student._id,
+      course1: clash.course1,
+      course2: clash.course2,
+      day: clash.day,
+      startTime: clash.startTime,
+      endTime: clash.endTime,
+      room1: clash.room1,
+      room2: clash.room2,
+      course1Group: clash.course1Group,
+      course2Group: clash.course2Group,
+      overlapMinutes: clash.overlapMinutes,
+      status: "active",
+    });
+  }
+
+  registration.status = remainingClashes.length > 0 ? "blocked" : "confirmed";
+  await registration.save();
+
+  return { registration, clashes: remainingClashes };
+};
 
 // Get active registration for a student
 const getStudentRegistration = async (req, res) => {
   try {
     const { studentId } = req.params;
 
-    const student = await Student.findOne({ studentId });
+    const student = await resolveStudent(studentId);
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -21,7 +84,7 @@ const getStudentRegistration = async (req, res) => {
     const registration = await Registration.findOne({
       student: student._id,
       semester: student.semester,
-    }).populate("courses");
+    }).sort({ createdAt: -1 }).populate("courses");
 
     const clashes = await Clash.find({
       student: student._id,
@@ -35,6 +98,7 @@ const getStudentRegistration = async (req, res) => {
         totalCredits: 0,
         status: "draft",
         semester: student.semester,
+        selectedSlots: {},
       },
       clashes,
     });
@@ -59,7 +123,7 @@ const registerCourses = async (req, res) => {
       });
     }
 
-    const student = await Student.findOne({ studentId });
+    const student = await resolveStudent(studentId);
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -75,18 +139,34 @@ const registerCourses = async (req, res) => {
       ],
     });
 
+    // Store only valid selections for the courses being registered. If a
+    // course has subgroup options and the client omitted one, use the first
+    // catalogue option consistently and persist that choice for this student.
+    const normalizedSelectedSlots = {};
+    for (const course of courses) {
+      const requestedSlot =
+        selectedSlots?.[course.courseCode] ||
+        selectedSlots?.[course.courseCode?.toUpperCase()] ||
+        selectedSlots?.[course._id.toString()];
+
+      if (course.slots?.length) {
+        const selectedSlot = course.slots.find((slot) => slot.slotName === requestedSlot) || course.slots[0];
+        normalizedSelectedSlots[course.courseCode] = selectedSlot.slotName;
+      }
+    }
+
     // Calculate total credits
     const totalCredits = courses.reduce((sum, c) => sum + (c.credits || 0), 0);
     const maxCredits = 20;
 
     // Detect timetable clashes
-    const detectedClashes = detectClashes(courses, selectedSlots || {});
+    const detectedClashes = detectClashes(courses, normalizedSelectedSlots);
 
     // Check StudentRequests for requested groups
-    if (selectedSlots) {
+    if (Object.keys(normalizedSelectedSlots).length > 0) {
       const studentRequests = await StudentRequest.find({ studentId: student.studentId });
       for (const course of courses) {
-        const selectedGroup = selectedSlots[course.courseCode];
+        const selectedGroup = normalizedSelectedSlots[course.courseCode];
         if (selectedGroup) {
           const matchingRequest = studentRequests.find(r => 
             r.courseCode === course.courseCode && 
@@ -127,6 +207,8 @@ const registerCourses = async (req, res) => {
         endTime: clash.endTime,
         room1: clash.room1,
         room2: clash.room2,
+        course1Group: clash.course1Group,
+        course2Group: clash.course2Group,
         overlapMinutes: clash.overlapMinutes,
         status: "active",
       });
@@ -152,6 +234,7 @@ const registerCourses = async (req, res) => {
 
     if (registration) {
       registration.courses = courses.map((c) => c._id);
+      registration.selectedSlots = normalizedSelectedSlots;
       registration.totalCredits = totalCredits;
       registration.status = regStatus;
       registration.academicYear = targetYear;
@@ -160,6 +243,7 @@ const registerCourses = async (req, res) => {
       registration = await Registration.create({
         student: student._id,
         courses: courses.map((c) => c._id),
+        selectedSlots: normalizedSelectedSlots,
         totalCredits,
         status: regStatus,
         academicYear: targetYear,
@@ -193,4 +277,5 @@ const registerCourses = async (req, res) => {
 module.exports = {
   getStudentRegistration,
   registerCourses,
+  applyApprovedSubgroup,
 };

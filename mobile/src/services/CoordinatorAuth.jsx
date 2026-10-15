@@ -12,6 +12,7 @@ export function CoordinatorAuthProvider({ children }) {
   const signOut = useCallback(async () => {
     setUser(null);
     await AsyncStorage.removeItem('current_admin_user');
+    await AsyncStorage.removeItem('current_student_user');
     await AsyncStorage.removeItem('saved_user_id');
     await AsyncStorage.removeItem('saved_password');
     router.replace('/');
