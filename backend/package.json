@@ -7,7 +7,6 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "seed": "node src/seed/seedData.js",
-    "seed:admin": "node src/seed/seedAdmin.js",
     "test": "node --test test/admin.test.js"
   },
   "keywords": [],

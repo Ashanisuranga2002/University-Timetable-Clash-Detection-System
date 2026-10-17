@@ -46,16 +46,6 @@ const clashSchema = new mongoose.Schema(
             trim: true,
         },
 
-        course1Group: {
-            type: String,
-            trim: true,
-        },
-
-        course2Group: {
-            type: String,
-            trim: true,
-        },
-
         overlapMinutes: {
             type: Number,
             required: true,

@@ -15,14 +15,6 @@ const registrationSchema = new mongoose.Schema(
             },
         ],
 
-        // The selected subgroup/slot belongs to this student's registration.
-        // Course.slots contains the catalogue options shared by everyone.
-        selectedSlots: {
-            type: Map,
-            of: String,
-            default: {},
-        },
-
         totalCredits: {
             type: Number,
             default: 0,

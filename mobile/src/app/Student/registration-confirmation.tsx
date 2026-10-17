@@ -1,5 +1,5 @@
 // mobile/src/app/(student)/registration-confirmation.tsx
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { 
   View, 
   Text, 
@@ -9,41 +9,13 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { FooterTab } from '@/components/FooterTab';
-import { useLocalSearchParams } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchDashboardApi } from '@/services/api';
 
 export default function RegistrationConfirmationScreen() {
   const router = useRouter();
-  const { studentId: paramStudentId } = useLocalSearchParams();
-  const [studentId, setStudentId] = useState(paramStudentId as string || '');
-  const [registeredCount, setRegisteredCount] = useState(0);
-  const [status, setStatus] = useState('draft');
-  const [hasClashes, setHasClashes] = useState(false);
-
-  useEffect(() => {
-    const loadRegistration = async () => {
-      const raw = await AsyncStorage.getItem('current_student_user').catch(() => null);
-      let storedUser: any = null;
-      try { storedUser = raw ? JSON.parse(raw) : null; } catch {}
-      const effectiveId = (paramStudentId as string) || storedUser?.studentId || storedUser?.userId || '';
-      setStudentId(effectiveId);
-
-      if (!effectiveId) return;
-      const response = await fetchDashboardApi(effectiveId).catch(() => null);
-      if (response?.success) {
-        setRegisteredCount(response.academics?.registeredCount || 0);
-        setStatus(response.academics?.status || 'draft');
-        setHasClashes(Boolean(response.clashes?.hasClashes));
-      }
-    };
-    loadRegistration();
-  }, [paramStudentId]);
 
   const handleReturnToDashboard = () => {
     // Navigate back to the main student dashboard
-    router.replace({ pathname: '/dashboard', params: { studentId } });
+    router.replace('/dashboard');
   };
 
   return (
@@ -73,14 +45,14 @@ export default function RegistrationConfirmationScreen() {
           {/* Titles[cite: 53] */}
           <Text style={styles.successTitle}>Registration Successful!</Text>
           <Text style={styles.successSubtitle}>
-            Your course registration has been saved successfully.
+            Your timetable clash has been resolved and submitted successfully.
           </Text>
 
           {/* Details Box[cite: 53] */}
           <View style={styles.detailsBox}>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Modules Registered</Text>
-              <Text style={styles.detailValue}>{registeredCount} Modules</Text>
+              <Text style={styles.detailValue}>4 Modules</Text>
             </View>
             
             <View style={styles.divider} />
@@ -88,9 +60,7 @@ export default function RegistrationConfirmationScreen() {
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Schedule Status</Text>
               <View style={styles.statusBadge}>
-                <Text style={styles.statusBadgeText}>
-                  {hasClashes ? 'CLASHES DETECTED' : status === 'confirmed' ? 'CONFLICT-FREE VERIFIED' : status.toUpperCase()}
-                </Text>
+                <Text style={styles.statusBadgeText}>CONFLICT-FREE VERIFIED</Text>
               </View>
             </View>
           </View>
@@ -105,7 +75,6 @@ export default function RegistrationConfirmationScreen() {
 
         </View>
       </View>
-      <FooterTab active="timetable" studentId={studentId as string} role="student" />
     </SafeAreaView>
   );
 }

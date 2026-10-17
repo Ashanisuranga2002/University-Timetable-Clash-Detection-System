@@ -27,7 +27,7 @@ const INDIGO = '#4F46E5';
 
 export default function AdminLoginScreen() {
   // Admin is the default selected role on this page
-  const [selectedRole, setSelectedRole] = useState<'Student' | 'Advisor' | 'Coordinator' | 'Admin'>('Admin');
+  const [selectedRole, setSelectedRole] = useState<'Student' | 'Advisor' | 'Admin'>('Admin');
 
   const [userId, setUserId] = useState('ADM001');
   const [password, setPassword] = useState('admin123');
@@ -90,36 +90,45 @@ export default function AdminLoginScreen() {
     setErrorMsg('');
 
     try {
-      // ── STAFF LOGIN ──────────────────────────────────────────
-      if (selectedRole !== 'Student') {
-        const staffRes = await loginAdminApi(id, password);
-        if (staffRes?.success) {
+      // ── Advisor ──────────────────────────────────────────
+      if (selectedRole === 'Advisor') {
+        await saveOrClearCredentials(id, password);
+        router.replace('/Advisor/dashboard' as any);
+        return;
+      }
+
+      // ── Student ──────────────────────────────────────────
+      if (selectedRole === 'Student') {
+        const studentRes = await loginStudentApi(id, password);
+        if (studentRes?.success) {
           await saveOrClearCredentials(id, password);
-          await AsyncStorage.removeItem('current_student_user');
-          if (staffRes.admin) {
-            await AsyncStorage.setItem('current_admin_user', JSON.stringify(staffRes.admin));
-          }
-          const staffRole = (staffRes.admin?.role || '').toLowerCase();
-          if (staffRole.includes('advisor') || selectedRole === 'Advisor') {
-            router.replace('/Advisor/dashboard' as any);
-          } else if (staffRole.includes('coordinator') || selectedRole === 'Coordinator') {
-            router.replace('/coordinator-dashboard' as any);
-          } else {
-            router.replace({
-              pathname: '/admin-dashboard',
-              params: {
-                adminId: staffRes.admin?.adminId || id,
-                adminName: staffRes.admin?.name || 'Administrator',
-                adminRole: staffRes.admin?.role || 'Administrator',
-                adminDept: staffRes.admin?.department || 'Academic Affairs',
-              },
-            });
-          }
+          router.replace({ pathname: '/dashboard', params: { studentId: id } });
           return;
         }
-
-        setErrorMsg(`Invalid ${selectedRole} ID or password.`);
+        setErrorMsg('Invalid student ID or password.');
+        return;
       }
+
+      // ── Admin ─────────────────────────────────────────────
+      const adminRes = await loginAdminApi(id, password);
+      if (adminRes?.success) {
+        await saveOrClearCredentials(id, password);
+        if (adminRes.admin) {
+          await AsyncStorage.setItem('current_admin_user', JSON.stringify(adminRes.admin));
+        }
+        router.replace({
+          pathname: '/admin',
+          params: {
+            adminId: adminRes.admin?.adminId || id,
+            adminName: adminRes.admin?.name || 'Administrator',
+            adminRole: adminRes.admin?.role || 'Administrator',
+            adminDept: adminRes.admin?.department || 'Academic Affairs',
+          },
+        });
+        return;
+      }
+
+      setErrorMsg('Invalid Admin ID or password.');
     } catch (err: any) {
       // Offline / demo fallback
       console.warn('Login error, using offline fallback:', err?.message);
@@ -127,17 +136,15 @@ export default function AdminLoginScreen() {
 
       if (selectedRole === 'Advisor') {
         router.replace('/Advisor/dashboard' as any);
-      } else if (selectedRole === 'Coordinator') {
-        router.replace('/coordinator-dashboard' as any);
       } else if (selectedRole === 'Student') {
         router.replace({ pathname: '/dashboard', params: { studentId: id } });
       } else {
         // Admin fallback
         router.replace({
-          pathname: '/admin-dashboard',
+          pathname: '/admin',
           params: {
             adminId: id,
-            adminName: 'Administrator',
+            adminName: 'Dr. Sarah Mitchell',
             adminRole: 'Administrator',
             adminDept: 'Academic Affairs',
           },
@@ -193,7 +200,7 @@ export default function AdminLoginScreen() {
 
             {/* ROLE SELECTOR — Student / Advisor / Admin */}
             <View style={styles.roleSelectorRow}>
-              {(['Student', 'Advisor', 'Coordinator', 'Admin'] as const).map((role) => {
+              {(['Student', 'Advisor', 'Admin'] as const).map((role) => {
                 const isActive = selectedRole === role;
                 return (
                   <TouchableOpacity
@@ -234,10 +241,7 @@ export default function AdminLoginScreen() {
 
             {/* UNIVERSITY / ADMIN ID */}
             <Text style={styles.fieldLabel}>
-              {selectedRole === 'Student' ? 'UNIVERSITY ID' :
-               selectedRole === 'Advisor' ? 'ADVISOR ID' :
-               selectedRole === 'Coordinator' ? 'COORDINATOR ID' :
-               'ADMIN ID'}
+              {selectedRole === 'Admin' ? 'ADMIN ID' : 'UNIVERSITY ID'}
             </Text>
             <View style={styles.inputShell}>
               <Ionicons
@@ -250,12 +254,7 @@ export default function AdminLoginScreen() {
                 style={styles.input}
                 value={userId}
                 onChangeText={handleUserIdChange}
-                placeholder={
-                  selectedRole === 'Student' ? "e.g. IT21047138" :
-                  selectedRole === 'Advisor' ? "e.g. AD001" :
-                  selectedRole === 'Coordinator' ? "e.g. CO001" :
-                  "e.g. AD001"
-                }
+                placeholder={selectedRole === 'Admin' ? 'e.g. ADM001' : 'e.g. IT21047138'}
                 placeholderTextColor="#94A3B8"
                 autoCapitalize="characters"
                 autoCorrect={false}

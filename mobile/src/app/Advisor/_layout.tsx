@@ -72,12 +72,6 @@ export default function AdvisorLayout() {
           href: null, 
         }}
       />
-      <Tabs.Screen
-        name="review-course-deletion"
-        options={{
-          href: null,
-        }}
-      />
     </Tabs>
   );
 }

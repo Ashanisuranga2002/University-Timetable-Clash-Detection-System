@@ -595,8 +595,6 @@ const cStyles = StyleSheet.create({
   },
 });
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 // ─── Main Admin Dashboard Component ──────────────────────────────────────────
 
 export default function AdminDashboardScreen() {
@@ -604,21 +602,9 @@ export default function AdminDashboardScreen() {
   const isCompact = width < 430 || height < 860;
 
   const params = useLocalSearchParams();
-  const [sessionUser, setSessionUser] = useState<any>(null);
-
-  useEffect(() => {
-    AsyncStorage.getItem('current_admin_user').then((raw) => {
-      if (raw) {
-        try {
-          setSessionUser(JSON.parse(raw));
-        } catch {}
-      }
-    });
-  }, []);
-
-  const adminName = (params.adminName as string) || sessionUser?.name || 'Administrator';
-  const adminId = (params.adminId as string) || sessionUser?.adminId || sessionUser?.userId || '';
-  const adminDept = (params.adminDept as string) || sessionUser?.department || sessionUser?.role || 'Academic Affairs';
+  const adminName = (params.adminName as string) || 'Dr. Sarah Mitchell';
+  const adminId = (params.adminId as string) || 'ADM001';
+  const adminDept = (params.adminDept as string) || 'Academic Affairs';
 
   const [stats, setStats] = useState<Stats | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);

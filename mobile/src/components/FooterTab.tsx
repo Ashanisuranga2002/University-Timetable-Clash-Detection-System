@@ -3,14 +3,13 @@ import { StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-export type TabName = 'dashboard' | 'timetable' | 'courses' | 'clashes' | 'requests' | 'profile';
+export type TabName = 'dashboard' | 'courses' | 'clashes' | 'profile';
 
 interface FooterTabProps {
   active: TabName;
   studentId?: string;
   adminId?: string;
-  advisorId?: string;
-  role?: 'student' | 'admin' | 'advisor';
+  role?: 'student' | 'admin';
 }
 
 interface TabItem {
@@ -20,120 +19,41 @@ interface TabItem {
   iconOutline: keyof typeof Ionicons.glyphMap;
 }
 
-const ADMIN_TABS: TabItem[] = [
+const TABS: TabItem[] = [
   { key: 'dashboard', label: 'Dashboard', iconName: 'grid', iconOutline: 'grid-outline' },
   { key: 'courses',   label: 'Timetable', iconName: 'calendar', iconOutline: 'calendar-outline' },
   { key: 'clashes',   label: 'Requests',  iconName: 'document-text', iconOutline: 'document-text-outline' },
   { key: 'profile',   label: 'Profile',   iconName: 'person', iconOutline: 'person-outline' },
 ];
 
-const ADVISOR_TABS: TabItem[] = [
-  { key: 'dashboard', label: 'Dashboard', iconName: 'grid', iconOutline: 'grid-outline' },
-  { key: 'timetable', label: 'Schedule', iconName: 'calendar', iconOutline: 'calendar-outline' },
-  { key: 'requests', label: 'Requests', iconName: 'document-text', iconOutline: 'document-text-outline' },
-  { key: 'profile', label: 'Profile', iconName: 'person', iconOutline: 'person-outline' },
-];
-
-const STUDENT_TABS: TabItem[] = [
-  { key: 'dashboard', label: 'Dashboard', iconName: 'grid', iconOutline: 'grid-outline' },
-  { key: 'timetable', label: 'Timetable', iconName: 'calendar', iconOutline: 'calendar-outline' },
-  { key: 'requests', label: 'Requests', iconName: 'document-text', iconOutline: 'document-text-outline' },
-  { key: 'profile', label: 'Profile', iconName: 'person', iconOutline: 'person-outline' },
-];
-
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-export function FooterTab({
-  active,
-  studentId: propStudentId,
-  adminId: propAdminId,
-  advisorId: propAdvisorId,
-  role = 'student',
-}: FooterTabProps) {
-  const [sessionStudentId, setSessionStudentId] = React.useState<string>('');
-  const [sessionAdminId, setSessionAdminId] = React.useState<string>('');
-
-  React.useEffect(() => {
-    let activeEffect = true;
-    AsyncStorage.getItem('current_student_user').then((raw) => {
-      if (!activeEffect || !raw) return;
-      try {
-        const u = JSON.parse(raw);
-        if (u?.studentId || u?.userId) {
-          setSessionStudentId(u.studentId || u.userId);
-        }
-      } catch {}
-    });
-
-    AsyncStorage.getItem('current_admin_user').then((raw) => {
-      if (!activeEffect || !raw) return;
-      try {
-        const u = JSON.parse(raw);
-        if (u?.adminId || u?.userId) {
-          setSessionAdminId(u.adminId || u.userId);
-        }
-      } catch {}
-    });
-
-    return () => {
-      activeEffect = false;
-    };
-  }, []);
-
-  const studentId = propStudentId || sessionStudentId || '';
-  const adminId = propAdminId || sessionAdminId || '';
-  const advisorId = propAdvisorId || sessionAdminId || '';
-
-  const tabs = role === 'admin' ? ADMIN_TABS : role === 'advisor' ? ADVISOR_TABS : STUDENT_TABS;
+export function FooterTab({ active, studentId = 'IT21047138', adminId, role = 'student' }: FooterTabProps) {
   const navigate = (key: TabName) => {
     if (key === active) return;
     
     if (role === 'admin') {
-      const targetParams: any = { role: 'admin' };
-      if (adminId) targetParams.adminId = adminId;
-
       if (key === 'dashboard') {
-        router.push({ pathname: '/admin-dashboard', params: targetParams });
+        router.push({ pathname: '/admin-dashboard', params: { adminId } });
       } else if (key === 'profile') {
-        router.push({ pathname: '/profile', params: targetParams });
+        router.push({ pathname: '/profile', params: { adminId, role: 'admin' } });
       } else {
-        router.push({ pathname: '/admin-dashboard', params: targetParams });
+        router.push({ pathname: '/admin-dashboard', params: { adminId } });
       }
-      return;
-    }
-
-    if (role === 'advisor') {
-      const advisorPathMap: Record<TabName, string> = {
-        dashboard: '/Advisor/dashboard',
-        timetable: '/Advisor/dashboard',
-        requests: '/Advisor/dashboard',
-        profile: '/Advisor/profile',
-        courses: '/Advisor/dashboard',
-        clashes: '/Advisor/dashboard',
-      };
-      const targetParams: any = { role: 'advisor' };
-      if (advisorId) targetParams.advisorId = advisorId;
-      router.push({ pathname: advisorPathMap[key] as any, params: targetParams });
       return;
     }
 
     // Student navigation
     const pathMap: Record<TabName, string> = {
       dashboard: '/dashboard',
-      timetable: '/Student/timetable-preview',
       courses: '/course-selection',
       clashes: '/course-selection',
-      requests: '/Student/requests',
       profile: '/profile',
     };
-    const targetParams: any = { role: 'student' };
-    if (studentId) targetParams.studentId = studentId;
-    router.push({ pathname: pathMap[key] as any, params: targetParams });
+    router.push({ pathname: pathMap[key] as any, params: { studentId, role: 'student' } });
   };
 
   return (
     <View style={styles.bar}>
-      {tabs.map((tab) => {
+      {TABS.map((tab) => {
         const isActive = tab.key === active;
         return (
           <TouchableOpacity

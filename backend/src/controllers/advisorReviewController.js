@@ -1,6 +1,5 @@
 const AdvisorReview = require('../models/AdvisorReview');
 const StudentRequest = require('../models/StudentRequest');
-const { applyApprovedSubgroup } = require('./registrationController');
 
 // CREATE: Create a review record for a student request (can be saved as DRAFT or SUBMITTED)
 exports.createReview = async (req, res) => {
@@ -12,18 +11,8 @@ exports.createReview = async (req, res) => {
         if (!studentRequest) {
             return res.status(404).json({ message: 'Associated student request not found' });
         }
-        if (studentRequest.status !== 'PENDING' || studentRequest.requestType !== 'ADVISOR_APPROVAL' || studentRequest.workflowStatus !== 'PENDING_ADVISOR') {
-            return res.status(400).json({ message: 'This request is not waiting for advisor approval' });
-        }
-
-        if (reviewStatus === 'SUBMITTED' && decision === 'APPROVED') {
-            const result = await applyApprovedSubgroup(studentRequest);
-            if (result.clashes.length > 0) {
-                return res.status(409).json({
-                    message: 'The proposed subgroup still has a timetable clash. Choose another subgroup.',
-                    clashes: result.clashes,
-                });
-            }
+        if (studentRequest.status !== 'PENDING') {
+            return res.status(400).json({ message: 'This request has already been processed' });
         }
 
         const newReview = new AdvisorReview({
@@ -38,19 +27,7 @@ exports.createReview = async (req, res) => {
 
         // If the advisor submits the review immediately, update the student's request status
         if (reviewStatus === 'SUBMITTED') {
-            studentRequest.status = decision === 'APPROVED' ? 'APPROVED' : 'PENDING';
-            studentRequest.lastDecision = decision;
-            studentRequest.advisorId = advisorId;
-            studentRequest.advisorNotes = comments;
-            if (decision === 'APPROVED') {
-                studentRequest.workflowStatus = 'APPROVED';
-                studentRequest.requestType = 'ADVISOR_APPROVAL';
-            } else {
-                // A rejection returns the item to the coordinator queue so a
-                // different subgroup/time can be assigned.
-                studentRequest.workflowStatus = 'PENDING_COORDINATOR';
-                studentRequest.requestType = 'COORDINATOR_CHANGE';
-            }
+            studentRequest.status = decision; 
             await studentRequest.save();
         }
 
@@ -76,20 +53,6 @@ exports.getAdvisorReviews = async (req, res) => {
     }
 };
 
-// READ: View a specific review by the Request ID
-exports.getReviewByRequestId = async (req, res) => {
-    try {
-        const { requestId } = req.params;
-        const review = await AdvisorReview.findOne({ requestId }).sort({ createdAt: -1 });
-        if (!review) {
-            return res.status(404).json({ message: 'No review found for this request' });
-        }
-        res.status(200).json(review);
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching review', error: error.message });
-    }
-};
-
 // UPDATE: Edit a draft review or its comments before submitting the decision
 exports.updateReview = async (req, res) => {
     try {
@@ -109,20 +72,6 @@ exports.updateReview = async (req, res) => {
             });
         }
 
-        if (reviewStatus === 'SUBMITTED' && decision === 'APPROVED') {
-            const request = await StudentRequest.findById(review.requestId);
-            if (!request) {
-                return res.status(404).json({ message: 'Associated student request not found' });
-            }
-            const result = await applyApprovedSubgroup(request);
-            if (result.clashes.length > 0) {
-                return res.status(409).json({
-                    message: 'The proposed subgroup still has a timetable clash. Choose another subgroup.',
-                    clashes: result.clashes,
-                });
-            }
-        }
-
         // 3. Apply the updates
         review.comments = comments || review.comments;
         review.decision = decision || review.decision;
@@ -132,16 +81,10 @@ exports.updateReview = async (req, res) => {
 
         // 4. If the update changes the status from DRAFT to SUBMITTED, update the StudentRequest
         if (updatedReview.reviewStatus === 'SUBMITTED') {
-            const request = await StudentRequest.findById(updatedReview.requestId);
-            if (request) {
-                request.status = updatedReview.decision === 'APPROVED' ? 'APPROVED' : 'PENDING';
-                request.lastDecision = updatedReview.decision;
-                request.advisorId = review.advisorId;
-                request.advisorNotes = updatedReview.comments;
-                request.workflowStatus = updatedReview.decision === 'APPROVED' ? 'APPROVED' : 'PENDING_COORDINATOR';
-                request.requestType = updatedReview.decision === 'APPROVED' ? 'ADVISOR_APPROVAL' : 'COORDINATOR_CHANGE';
-                await request.save();
-            }
+            await StudentRequest.findByIdAndUpdate(
+                updatedReview.requestId, 
+                { status: updatedReview.decision }
+            );
         }
 
         res.status(200).json({ message: 'Review updated successfully', review: updatedReview });

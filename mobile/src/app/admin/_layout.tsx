@@ -18,7 +18,6 @@ export default function AdminLayout() {
         <Stack.Screen name="system-health" />
         <Stack.Screen name="alerts" />
         <Stack.Screen name="issue-details" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="course-deletion-requests" options={{ animation: 'slide_from_right' }} />
 
         {/* User Management */}
         <Stack.Screen name="users/index" options={{ animation: 'slide_from_right' }} />
