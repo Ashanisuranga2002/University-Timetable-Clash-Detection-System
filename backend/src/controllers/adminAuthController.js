@@ -16,30 +16,46 @@ const loginAdmin = async (req, res) => {
 
     const cleanId = adminId.trim();
 
-    // 1. Try finding in Admin collection
-    let admin = await Admin.findOne({
-      $or: [{ adminId: cleanId }, { email: cleanId.toLowerCase() }],
-    });
+    // User is the source of truth for accounts managed in the admin dashboard.
+    // Older deployments may still have an Admin-only account, so retain that
+    // collection as a fallback when no directory account exists.
+    const userAdmin = await User.findOne({
+      $or: [
+        { userId: new RegExp(`^${cleanId}$`, "i") },
+        { email: cleanId.toLowerCase() },
+      ],
+      role: { $in: ["Administrator", "Coordinator", "Academic Advisor"] },
+    }).select("+passwordHash");
 
+    let admin = null;
     let isPasswordValid = false;
     let isUserModel = false;
 
-    if (admin) {
-      isPasswordValid = await bcrypt.compare(password, admin.passwordHash);
-    } else {
-      // 2. Fallback: try finding in User collection with Administrator role
-      const userAdmin = await User.findOne({
-        $or: [{ userId: cleanId.toUpperCase() }, { email: cleanId.toLowerCase() }],
-        role: "Administrator",
-      }).select("+passwordHash");
-
-      if (userAdmin && userAdmin.passwordHash) {
-        isPasswordValid = await bcrypt.compare(password, userAdmin.passwordHash);
-        if (isPasswordValid) {
-          admin = userAdmin;
-          isUserModel = true;
-        }
+    if (userAdmin) {
+      if (userAdmin.status && userAdmin.status !== "Active") {
+        return res.status(403).json({
+          success: false,
+          message: `This account is ${userAdmin.status.toLowerCase()}.`,
+        });
       }
+      isPasswordValid = Boolean(
+        userAdmin.passwordHash && await bcrypt.compare(password, userAdmin.passwordHash)
+      );
+      if (isPasswordValid) {
+        admin = userAdmin;
+        isUserModel = true;
+      }
+    } else {
+      // Legacy accounts created before the user directory was introduced.
+      admin = await Admin.findOne({
+        $or: [
+          { adminId: new RegExp(`^${cleanId}$`, "i") },
+          { email: cleanId.toLowerCase() },
+        ],
+      }).select("+passwordHash");
+      isPasswordValid = Boolean(
+        admin?.passwordHash && await bcrypt.compare(password, admin.passwordHash)
+      );
     }
 
     if (!admin || !isPasswordValid) {
@@ -92,47 +108,44 @@ const getAdminProfile = async (req, res) => {
       req.headers["x-admin-id"] ||
       req.headers["x-user-id"];
 
-    let admin = null;
+    if (!targetId || !targetId.trim()) {
+      return res.status(400).json({ success: false, message: "Admin ID is required" });
+    }
 
-    if (targetId) {
-      const cleanId = targetId.trim();
-      const isObjectId = cleanId.match(/^[0-9a-fA-F]{24}$/);
+    const cleanId = targetId.trim();
+    const isObjectId = cleanId.match(/^[0-9a-fA-F]{24}$/);
 
-      admin = await Admin.findOne({
+    let admin = await Admin.findOne({
+      $or: [
+        { adminId: new RegExp(`^${cleanId}$`, "i") },
+        { email: cleanId.toLowerCase() },
+        ...(isObjectId ? [{ _id: cleanId }] : []),
+      ],
+    }).select("-passwordHash");
+
+    if (!admin) {
+      const userAdmin = await User.findOne({
         $or: [
-          { adminId: cleanId },
+          { userId: new RegExp(`^${cleanId}$`, "i") },
           { email: cleanId.toLowerCase() },
           ...(isObjectId ? [{ _id: cleanId }] : []),
         ],
       }).select("-passwordHash");
 
-      if (!admin) {
-        const userAdmin = await User.findOne({
-          $or: [
-            { userId: cleanId.toUpperCase() },
-            { email: cleanId.toLowerCase() },
-            ...(isObjectId ? [{ _id: cleanId }] : []),
-          ],
-        }).select("-passwordHash");
-
-        if (userAdmin) {
-          admin = {
-            id: userAdmin._id,
-            adminId: userAdmin.userId,
-            userId: userAdmin.userId,
-            name: userAdmin.name,
-            email: userAdmin.email,
-            role: userAdmin.role,
-            department: userAdmin.department,
-            status: userAdmin.status,
-            createdAt: userAdmin.createdAt,
-            lastLogin: new Date(),
-          };
-        }
+      if (userAdmin) {
+        admin = {
+          id: userAdmin._id,
+          adminId: userAdmin.userId,
+          userId: userAdmin.userId,
+          name: userAdmin.name,
+          email: userAdmin.email,
+          role: userAdmin.role,
+          department: userAdmin.department,
+          status: userAdmin.status,
+          createdAt: userAdmin.createdAt,
+          lastLogin: new Date(),
+        };
       }
-    } else {
-      // Find the first admin if no ID provided
-      admin = await Admin.findOne().select("-passwordHash");
     }
 
     if (!admin) {

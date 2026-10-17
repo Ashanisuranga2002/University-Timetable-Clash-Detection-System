@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
+// Use your machine IP for physical devices & Expo Go; localhost for web / iOS simulator
+const LOCAL_IP = '192.168.1.2';
 const PORT = '5001';
 
 // Automatically detect host machine IP when running Expo Go or native
@@ -104,10 +106,18 @@ async function apiFetch(path: string, options?: RequestInit) {
 export const API_BASE_URL = activeBaseUrl;
 
 export function loginStudentApi(studentId: string, password: string) {
-  return apiFetch('/auth/login', {
+  return apiFetch('/auth/student-login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ studentId, password }),
+  });
+}
+
+export function loginUnifiedApi(userId: string, password: string) {
+  return apiFetch('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, password }),
   });
 }
 
@@ -129,6 +139,166 @@ export function submitRegistrationApi(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ studentId, courseIds, selectedSlots: selectedSlots || {} }),
+  });
+}
+
+export function createCourseDeletionRequestApi(
+  studentId: string,
+  courseId: string,
+  reason: string
+) {
+  return apiFetch('/course-deletion-requests', {
+    method: 'POST',
+    body: JSON.stringify({ studentId, courseId, reason }),
+  });
+}
+
+export function fetchStudentCourseDeletionRequestsApi(studentId: string) {
+  return apiFetch(`/course-deletion-requests/student/${encodeURIComponent(studentId)}`);
+}
+
+export function fetchAdminCourseDeletionRequestsApi() {
+  return apiFetch('/admin/course-deletion-requests');
+}
+
+export function approveCourseDeletionRequestApi(
+  requestId: string,
+  adminId: string,
+  adminComment?: string
+) {
+  return apiFetch(`/admin/course-deletion-requests/${requestId}/approve`, {
+    method: 'PUT',
+    body: JSON.stringify({ adminId, adminComment }),
+  });
+}
+
+export function rejectCourseDeletionRequestApi(
+  requestId: string,
+  adminId: string,
+  adminComment?: string
+) {
+  return apiFetch(`/admin/course-deletion-requests/${requestId}/reject`, {
+    method: 'PUT',
+    body: JSON.stringify({ adminId, adminComment }),
+  });
+}
+
+export function fetchAdvisorCourseDeletionRequestsApi() {
+  return apiFetch('/advisor/course-deletion-requests');
+}
+
+export function approveAdvisorCourseDeletionRequestApi(
+  requestId: string,
+  advisorId: string,
+  advisorComment?: string
+) {
+  return apiFetch(`/advisor/course-deletion-requests/${requestId}/approve`, {
+    method: 'PUT',
+    body: JSON.stringify({ advisorId, adminComment: advisorComment }),
+  });
+}
+
+export function rejectAdvisorCourseDeletionRequestApi(
+  requestId: string,
+  advisorId: string,
+  advisorComment?: string
+) {
+  return apiFetch(`/advisor/course-deletion-requests/${requestId}/reject`, {
+    method: 'PUT',
+    body: JSON.stringify({ advisorId, adminComment: advisorComment }),
+  });
+}
+
+export function fetchSubgroupsApi(courseCode: string) {
+  return apiFetch(`/coordinator/subgroups/${courseCode}`);
+}
+
+export function previewTimetableApi(
+  courseIds: string[],
+  selectedSlots?: Record<string, string>,
+  proposedSubgroups?: {
+    courseCode: string;
+    subgroupId: string;
+    groupName?: string;
+    day?: string;
+    startTime?: string;
+    endTime?: string;
+    venue?: string;
+    replaceSession?: { day: string; startTime: string; endTime: string };
+  }[]
+) {
+  return apiFetch('/coordinator/preview-timetable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ courseIds, selectedSlots, proposedSubgroups }),
+  });
+}
+
+export function submitAlternativeSubgroupRequest(
+  studentId: string,
+  courseCode: string,
+  currentGroup: string,
+  requestedGroup: string,
+  conflictDetails: string,
+  reason: string,
+  requestType: 'COORDINATOR_CHANGE' | 'ADVISOR_APPROVAL' = 'COORDINATOR_CHANGE',
+  metadata?: {
+    courseIds?: string[];
+    selectedSlots?: Record<string, string>;
+    conflictDay?: string;
+    conflictStartTime?: string;
+    conflictEndTime?: string;
+  }
+) {
+  return apiFetch('/student-requests', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId, courseCode, currentGroup, requestedGroup, conflictDetails, reason, requestType, ...metadata }),
+  });
+}
+
+export function fetchAllStudentRequestsApi(filters?: { requestType?: string; workflowStatus?: string }) {
+  const query = new URLSearchParams();
+  if (filters?.requestType) query.set('requestType', filters.requestType);
+  if (filters?.workflowStatus) query.set('workflowStatus', filters.workflowStatus);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return apiFetch(`/student-requests/all${suffix}`);
+}
+
+export function fetchStudentRequestsApi(studentId: string) {
+  return apiFetch(`/student-requests/${encodeURIComponent(studentId)}`);
+}
+
+export function updateStudentRequestApi(
+  requestId: string,
+  studentId: string,
+  requestedGroup: string,
+  reason: string,
+  conflictDetails?: string
+) {
+  return apiFetch(`/student-requests/${encodeURIComponent(requestId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ studentId, requestedGroup, reason, conflictDetails }),
+  });
+}
+export function deleteStudentRequestApi(requestId: string, studentId: string) {
+  return apiFetch(`/student-requests/${encodeURIComponent(requestId)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ studentId }),
+  });
+}
+
+export function createAdvisorReviewApi(
+  requestId: string,
+  advisorId: string,
+  comments: string,
+  decision: 'APPROVED' | 'REJECTED' | 'PENDING',
+  reviewStatus: 'DRAFT' | 'SUBMITTED'
+) {
+  return apiFetch('/advisor-reviews', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requestId, advisorId, comments, decision, reviewStatus }),
   });
 }
 
@@ -523,4 +693,87 @@ export function updateAdminProfileApi(
   });
 }
 
+// ─── Coordinator Timetable & Subgroup APIs ────────────────────────────────────
+
+export interface CoordinatorStats {
+  totalCourses: number;
+  configuredCourses: number;
+  pendingCourses: number;
+  totalSubgroups: number;
+  pendingClashRequests: number;
+}
+
+export function fetchCoordinatorStatsApi(): Promise<{
+  success: boolean;
+  stats: CoordinatorStats;
+  recentRequests?: any[];
+}> {
+  return apiFetch('/coordinator/stats');
+}
+
+export function fetchCoordinatorCoursesApi(): Promise<{
+  success: boolean;
+  count: number;
+  courses: any[];
+}> {
+  return apiFetch('/coordinator/courses');
+}
+
+export function fetchCoordinatorCourseDetailsApi(courseCode: string): Promise<{
+  success: boolean;
+  course: any;
+  subgroups: any[];
+}> {
+  return apiFetch(`/coordinator/courses/${encodeURIComponent(courseCode)}`);
+}
+
+export function addCourseScheduleSlotApi(
+  courseCode: string,
+  slot: { day: string; startTime: string; endTime: string; room?: string; type?: string }
+) {
+  return apiFetch(`/coordinator/courses/${encodeURIComponent(courseCode)}/schedule`, {
+    method: 'POST',
+    body: JSON.stringify(slot),
+  });
+}
+
+export function deleteCourseScheduleSlotApi(courseCode: string, slotIndex: number) {
+  return apiFetch(`/coordinator/courses/${encodeURIComponent(courseCode)}/schedule/${slotIndex}`, {
+    method: 'DELETE',
+  });
+}
+
+export function createCourseSubgroupApi(
+  courseCode: string,
+  subgroup: { groupName: string; day: string; startTime: string; endTime: string; venue?: string; capacity?: number }
+) {
+  return apiFetch(`/coordinator/courses/${encodeURIComponent(courseCode)}/subgroups`, {
+    method: 'POST',
+    body: JSON.stringify(subgroup),
+  });
+}
+
+export function deleteCourseSubgroupApi(subgroupId: string) {
+  return apiFetch(`/coordinator/subgroups/${encodeURIComponent(subgroupId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function fetchCoordinatorClashRequestsApi(): Promise<{
+  success: boolean;
+  count: number;
+  requests: any[];
+}> {
+  return apiFetch('/coordinator/clash-requests');
+}
+
+export function resolveCoordinatorClashRequestApi(
+  id: string,
+  data: { proposedSubgroup?: string; coordinatorNotes?: string; coordinatorId?: string }
+) {
+  return apiFetch(`/coordinator/clash-requests/${encodeURIComponent(id)}/resolve`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
 

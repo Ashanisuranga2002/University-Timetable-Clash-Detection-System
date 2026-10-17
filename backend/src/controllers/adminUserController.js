@@ -1,5 +1,8 @@
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
+const Student = require("../models/Student");
+const Admin = require("../models/Admin");
+
 
 const INITIAL_USERS = [
   {
@@ -27,6 +30,14 @@ const INITIAL_USERS = [
     status: "Active",
   },
   {
+    userId: "STU1001",
+    name: "Demo Student",
+    email: "student1001@university.edu",
+    role: "Student",
+    department: "Faculty of Computing",
+    status: "Active",
+  },
+  {
     userId: "MON001",
     name: "Elena Rostova",
     email: "elena.r@infra.university.edu",
@@ -44,17 +55,48 @@ const INITIAL_USERS = [
   },
 ];
 
+const DEFAULT_PASSWORDS = {
+  ADM001: "admin123",
+  STU1001: "Student@123",
+};
+
 async function ensureSeedUsers() {
-  const count = await User.countDocuments();
-  if (count === 0) {
-    const salt = await bcrypt.genSalt(10);
-    const defaultHash = await bcrypt.hash("User@123", salt);
-    const usersWithHash = INITIAL_USERS.map((u) => ({
-      ...u,
-      passwordHash: defaultHash,
-    }));
-    await User.insertMany(usersWithHash);
+  for (const user of INITIAL_USERS) {
+    const existing = await User.findOne({ userId: user.userId });
+    if (existing) continue;
+
+    const rawPassword = DEFAULT_PASSWORDS[user.userId] || "User@123";
+    const passwordHash = await bcrypt.hash(rawPassword, 10);
+    await User.create({ ...user, passwordHash });
   }
+}
+
+exports.ensureSeedUsers = ensureSeedUsers;
+
+const STAFF_ROLES = ["Administrator", "Coordinator", "Academic Advisor"];
+
+async function syncStaffAccount(user) {
+  const isStaff = STAFF_ROLES.includes(user.role);
+  const identity = {
+    $or: [{ adminId: user.userId }, { email: user.email }],
+  };
+
+  if (!isStaff) {
+    await Admin.deleteOne(identity);
+    return;
+  }
+
+  const updates = {
+    adminId: user.userId,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    department: user.department || "Academic Affairs",
+    status: user.status || "Active",
+  };
+  if (user.passwordHash) updates.passwordHash = user.passwordHash;
+
+  await Admin.findOneAndUpdate(identity, { $set: updates }, { upsert: true, returnDocument: "after" });
 }
 
 // GET /api/admin/users
@@ -82,7 +124,6 @@ exports.getUsers = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 // GET /api/admin/users/:id
 exports.getUserById = async (req, res) => {
   try {
@@ -97,7 +138,6 @@ exports.getUserById = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 // POST /api/admin/users
 exports.createUser = async (req, res) => {
   try {
@@ -113,8 +153,8 @@ exports.createUser = async (req, res) => {
       return res.status(409).json({ success: false, message: "User ID or Email already exists" });
     }
 
-    let passwordHash = undefined;
-    const rawPass = password && password.trim() ? password.trim() : "Temp@123";
+    const suppliedPassword = Boolean(password && password.trim());
+    const rawPass = suppliedPassword ? password.trim() : "Temp@123";
     const salt = await bcrypt.genSalt(10);
     passwordHash = await bcrypt.hash(rawPass, salt);
 
@@ -128,14 +168,66 @@ exports.createUser = async (req, res) => {
       status: status || "Active",
     });
 
+    // Synchronize to Student collection if student
+    if ((role || "Student").toLowerCase() === "student" || userId.trim().toUpperCase().startsWith("IT")) {
+      try {
+        await Student.findOneAndUpdate(
+          { $or: [{ studentId: userId.trim().toUpperCase() }, { email: email.trim().toLowerCase() }] },
+          {
+            studentId: userId.trim().toUpperCase(),
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            passwordHash,
+            programme: department?.trim() || "BSc (Hons) in Information Technology",
+            semester: 1,
+          },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+      } catch (syncErr) {
+        console.warn("Student sync warning:", syncErr.message);
+      }
+    }
+
+    // Synchronize to Admin collection if Administrator, Coordinator, or Academic Advisor
+    if (
+      ["Administrator", "Coordinator", "Academic Advisor"].includes(role) ||
+      userId.trim().toUpperCase().startsWith("ADM") ||
+      userId.trim().toUpperCase().startsWith("CO") ||
+      userId.trim().toUpperCase().startsWith("AD")
+    ) {
+      try {
+        await Admin.findOneAndUpdate(
+          { $or: [{ adminId: userId.trim().toUpperCase() }, { email: email.trim().toLowerCase() }] },
+          {
+            adminId: userId.trim().toUpperCase(),
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            passwordHash,
+            role: role || "Administrator",
+            department: department?.trim() || "Academic Affairs",
+            status: status || "Active",
+          },
+          { upsert: true, returnDocument: 'after' }
+        );
+      } catch (syncErr) {
+        console.warn("Staff sync warning:", syncErr.message);
+      }
+    }
+
     const userObj = newUser.toObject();
     delete userObj.passwordHash;
 
-    return res.status(201).json({ success: true, data: userObj, message: "User created successfully" });
+    return res.status(201).json({
+      success: true,
+      data: userObj,
+      message: "User created successfully",
+      temporaryPassword: suppliedPassword ? null : rawPass,
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 // PUT /api/admin/users/:id
 exports.updateUser = async (req, res) => {
@@ -170,6 +262,28 @@ exports.updateUser = async (req, res) => {
 
     await user.save();
 
+    // Keep the canonical student profile in sync with directory edits. This
+    // prevents a stale Student document from winning login resolution later.
+    if (user.role === "Student") {
+      const studentUpdates = {
+        studentId: user.userId,
+        name: user.name,
+        email: user.email,
+        programme: user.department || "BSc (Hons) in Information Technology",
+      };
+      if (password && password.trim()) {
+        studentUpdates.passwordHash = user.passwordHash;
+      }
+
+      await Student.findOneAndUpdate(
+        { $or: [{ studentId: user.userId }, { email: user.email }] },
+        { $set: studentUpdates },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    }
+
+    await syncStaffAccount(user);
+
     const userObj = user.toObject();
     delete userObj.passwordHash;
 
@@ -197,6 +311,7 @@ exports.updateUserStatus = async (req, res) => {
 
     user.status = status;
     await user.save();
+    await syncStaffAccount(user);
 
     const userObj = user.toObject();
     delete userObj.passwordHash;
@@ -228,8 +343,11 @@ exports.deleteUser = async (req, res) => {
     }
 
     await User.deleteOne({ _id: user._id });
+    await Student.deleteOne({ $or: [{ studentId: user.userId }, { email: user.email }] }).catch(() => null);
+    await Admin.deleteOne({ $or: [{ adminId: user.userId }, { email: user.email }] }).catch(() => null);
     return res.status(200).json({ success: true, message: "User deleted successfully" });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+

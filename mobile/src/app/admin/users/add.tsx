@@ -77,7 +77,7 @@ export default function AddUserScreen() {
 
     setLoading(true);
     try {
-      await createUserApi({
+      const response = await createUserApi({
         userId: userId.trim().toUpperCase(),
         name: name.trim(),
         email: email.trim().toLowerCase(),
@@ -86,6 +86,15 @@ export default function AddUserScreen() {
         department: department.trim(),
         status,
       } as any);
+
+      if (response?.temporaryPassword) {
+        Alert.alert(
+          'User created',
+          `User ID: ${userId.trim().toUpperCase()}\nTemporary password: ${response.temporaryPassword}`,
+          [{ text: 'Continue', onPress: () => (router.canGoBack() ? router.back() : router.push('/admin/users')) }]
+        );
+        return;
+      }
 
       if (router.canGoBack()) {
         router.back();

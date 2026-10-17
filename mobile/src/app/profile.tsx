@@ -12,14 +12,30 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FooterTab } from '../components/FooterTab';
 import { fetchDashboardApi, fetchAdminDashboardApi } from '../services/api';
 
 export default function ProfileScreen() {
   const params = useLocalSearchParams();
-  const role = (params.role as 'student' | 'admin') || (params.adminId ? 'admin' : 'student');
-  const studentId = (params.studentId as string) || 'IT21047138';
-  const adminId = (params.adminId as string) || 'ADM001';
+  const [sessionStudent, setSessionStudent] = useState<any>(null);
+  const [sessionAdmin, setSessionAdmin] = useState<any>(null);
+
+  const role =
+    (params.role as 'student' | 'admin') ||
+    (params.adminId ? 'admin' : sessionAdmin ? 'admin' : 'student');
+
+  const studentId =
+    (params.studentId as string) ||
+    sessionStudent?.studentId ||
+    sessionStudent?.userId ||
+    '';
+
+  const adminId =
+    (params.adminId as string) ||
+    sessionAdmin?.adminId ||
+    sessionAdmin?.userId ||
+    '';
 
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState<{
@@ -32,48 +48,106 @@ export default function ProfileScreen() {
     stat2Value: string;
     stat2Label: string;
   }>({
-    name: role === 'admin' ? 'Dr. Nimal Perera' : 'Alex Perera',
-    roleTitle: role === 'admin' ? 'Senior Lecturer & Academic Advisor' : 'Faculty of Computing • Year 3',
-    idBadge: role === 'admin' ? `ID: ${adminId}` : `ID: ${studentId}`,
-    initials: role === 'admin' ? 'NP' : 'AP',
-    stat1Value: role === 'admin' ? '214' : '4',
-    stat1Label: role === 'admin' ? 'Total Approvals' : 'Enrolled Courses',
-    stat2Value: role === 'admin' ? 'Mon & Wed' : '16 Credits',
-    stat2Label: role === 'admin' ? 'Office Hours' : 'Academic Load',
+    name: 'User Profile',
+    roleTitle: 'University Member',
+    idBadge: 'ID: --',
+    initials: 'ST',
+    stat1Value: '0',
+    stat1Label: 'Enrolled Courses',
+    stat2Value: '0 Credits',
+    stat2Label: 'Academic Load',
   });
+
+  function getInitials(fullName: string) {
+    if (!fullName) return 'ST';
+    const parts = fullName
+      .replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, '')
+      .trim()
+      .split(/\s+/);
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return (parts[0]?.substring(0, 2) || 'ST').toUpperCase();
+  }
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       try {
+        const [studentRaw, adminRaw] = await Promise.all([
+          AsyncStorage.getItem('current_student_user').catch(() => null),
+          AsyncStorage.getItem('current_admin_user').catch(() => null),
+        ]);
+
+        let parsedStudent = null;
+        let parsedAdmin = null;
+        if (studentRaw) {
+          try {
+            parsedStudent = JSON.parse(studentRaw);
+            setSessionStudent(parsedStudent);
+          } catch {}
+        }
+        if (adminRaw) {
+          try {
+            parsedAdmin = JSON.parse(adminRaw);
+            setSessionAdmin(parsedAdmin);
+          } catch {}
+        }
+
         if (role === 'admin') {
-          const res = await fetchAdminDashboardApi();
-          if (res?.success) {
-            setProfileData({
-              name: (params.adminName as string) || 'Dr. Nimal Perera',
-              roleTitle: (params.adminDept as string) || 'Senior Lecturer & Academic Advisor',
-              idBadge: `ID: ${adminId}`,
-              initials: getInitials((params.adminName as string) || 'Dr. Nimal Perera'),
-              stat1Value: String(res.stats?.totalRegistrations || '214'),
-              stat1Label: 'Total Approvals',
-              stat2Value: 'Mon & Wed',
-              stat2Label: 'Office Hours',
-            });
-          }
+          const res = await fetchAdminDashboardApi().catch(() => null);
+          const staffName =
+            (params.adminName as string) ||
+            parsedAdmin?.name ||
+            'Administrator';
+          const staffDept =
+            (params.adminDept as string) ||
+            parsedAdmin?.department ||
+            parsedAdmin?.role ||
+            'Academic Affairs';
+          const staffId =
+            (params.adminId as string) ||
+            parsedAdmin?.adminId ||
+            parsedAdmin?.userId ||
+            adminId;
+
+          setProfileData({
+            name: staffName,
+            roleTitle: staffDept,
+            idBadge: `ID: ${staffId}`,
+            initials: getInitials(staffName),
+            stat1Value: String(res?.stats?.totalRegistrations || '0'),
+            stat1Label: 'Total Approvals',
+            stat2Value: 'Mon & Wed',
+            stat2Label: 'Office Hours',
+          });
         } else {
-          const res = await fetchDashboardApi(studentId);
-          if (res?.success && res.student) {
-            setProfileData({
-              name: res.student.name || 'Alex Perera',
-              roleTitle: res.student.programme || 'Faculty of Computing • Year 3',
-              idBadge: `ID: ${res.student.studentId || studentId}`,
-              initials: res.student.initials || getInitials(res.student.name || 'Alex Perera'),
-              stat1Value: String(res.academics?.registeredCount || '4'),
-              stat1Label: 'Enrolled Courses',
-              stat2Value: `${res.academics?.totalCredits || '16'} Credits`,
-              stat2Label: 'Academic Load',
-            });
-          }
+          const effectiveStudentId =
+            (params.studentId as string) ||
+            parsedStudent?.studentId ||
+            parsedStudent?.userId ||
+            studentId;
+
+          const res = effectiveStudentId ? await fetchDashboardApi(effectiveStudentId).catch(() => null) : null;
+          const stuName =
+            res?.student?.name ||
+            parsedStudent?.name ||
+            (effectiveStudentId ? `Student ${effectiveStudentId}` : 'Student');
+          const stuProg =
+            res?.student?.programme ||
+            parsedStudent?.programme ||
+            parsedStudent?.department ||
+            'Faculty of Computing';
+          const stuId = res?.student?.studentId || effectiveStudentId || parsedStudent?.studentId || parsedStudent?.userId || '--';
+
+          setProfileData({
+            name: stuName,
+            roleTitle: stuProg,
+            idBadge: `ID: ${stuId}`,
+            initials: res?.student?.initials || getInitials(stuName),
+            stat1Value: String(res?.academics?.registeredCount ?? 0),
+            stat1Label: 'Enrolled Courses',
+            stat2Value: `${res?.academics?.totalCredits ?? 0} Credits`,
+            stat2Label: 'Academic Load',
+          });
         }
       } catch (e) {
         // Fallback profile state remains active
@@ -83,12 +157,6 @@ export default function ProfileScreen() {
     }
     loadData();
   }, [role, studentId, adminId]);
-
-  function getInitials(fullName: string) {
-    const parts = fullName.replace(/^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*/i, '').trim().split(' ');
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return (parts[0]?.substring(0, 2) || 'NP').toUpperCase();
-  }
 
   const handleBack = () => {
     if (role === 'admin') {
@@ -107,13 +175,16 @@ export default function ProfileScreen() {
         {
           text: 'Sign Out',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
+            await AsyncStorage.removeItem('current_student_user');
+            await AsyncStorage.removeItem('current_admin_user');
             router.replace('/');
           },
         },
       ]
     );
   };
+
 
   return (
     <SafeAreaView style={styles.root}>

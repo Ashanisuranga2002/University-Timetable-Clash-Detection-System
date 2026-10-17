@@ -1,5 +1,5 @@
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
-import { SymbolView } from 'expo-symbols';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import CoordinatorTheme from '@/constants/CoordinatorTheme';
@@ -8,210 +8,135 @@ const {
   radius,
   spacing
 } = CoordinatorTheme;
-const iconNames = {
-  dashboard: {
-    ios: 'square.grid.2x2',
-    android: 'dashboard',
-    web: 'dashboard'
-  },
-  calendar: {
-    ios: 'calendar',
-    android: 'calendar_month',
-    web: 'calendar_month'
-  },
-  validation: {
-    ios: 'checkmark.shield',
-    android: 'verified_user',
-    web: 'verified_user'
-  },
-  profile: {
-    ios: 'person.crop.circle',
-    android: 'account_circle',
-    web: 'account_circle'
-  },
-  upload: {
-    ios: 'arrow.up.doc',
-    android: 'cloud_upload',
-    web: 'cloud_upload'
-  },
-  group: {
-    ios: 'person.2',
-    android: 'groups',
-    web: 'groups'
-  },
-  check: {
-    ios: 'checkmark.circle',
-    android: 'check_circle',
-    web: 'check_circle'
-  },
-  warning: {
-    ios: 'exclamationmark.triangle',
-    android: 'warning',
-    web: 'warning'
-  },
-  file: {
-    ios: 'doc.text',
-    android: 'description',
-    web: 'description'
-  },
-  sync: {
-    ios: 'arrow.triangle.2.circlepath',
-    android: 'sync',
-    web: 'sync'
-  },
-  arrow: {
-    ios: 'arrow.right',
-    android: 'arrow_forward',
-    web: 'arrow_forward'
-  },
-  back: {
-    ios: 'arrow.left',
-    android: 'arrow_back',
-    web: 'arrow_back'
-  },
-  refresh: {
-    ios: 'arrow.clockwise',
-    android: 'refresh',
-    web: 'refresh'
-  },
-  edit: {
-    ios: 'pencil',
-    android: 'edit',
-    web: 'edit'
-  },
-  building: {
-    ios: 'building.2',
-    android: 'domain',
-    web: 'domain'
-  },
-  clock: {
-    ios: 'clock',
-    android: 'schedule',
-    web: 'schedule'
-  },
-  download: {
-    ios: 'arrow.down.to.line',
-    android: 'download',
-    web: 'download'
-  },
-  filter: {
-    ios: 'line.3.horizontal.decrease',
-    android: 'tune',
-    web: 'tune'
-  },
-  info: {
-    ios: 'info.circle',
-    android: 'info',
-    web: 'info'
-  },
-  chevron: {
-    ios: 'chevron.down',
-    android: 'expand_more',
-    web: 'expand_more'
-  },
-  close: {
-    ios: 'xmark',
-    android: 'close',
-    web: 'close'
-  },
-  history: {
-    ios: 'clock.arrow.circlepath',
-    android: 'history',
-    web: 'history'
-  },
-  shield: {
-    ios: 'lock.shield',
-    android: 'security',
-    web: 'security'
-  },
-  more: {
-    ios: 'ellipsis',
-    android: 'more_horiz',
-    web: 'more_horiz'
-  },
-  save: {
-    ios: 'checkmark',
-    android: 'done',
-    web: 'done'
-  },
-  trash: {
-    ios: 'trash',
-    android: 'delete',
-    web: 'delete'
-  }
+
+const ioniconMap = {
+  dashboard: 'grid-outline',
+  calendar: 'calendar-outline',
+  validation: 'shield-checkmark-outline',
+  profile: 'person-circle-outline',
+  upload: 'cloud-upload-outline',
+  group: 'people-outline',
+  check: 'checkmark-circle-outline',
+  warning: 'warning-outline',
+  file: 'document-text-outline',
+  sync: 'sync-outline',
+  arrow: 'arrow-forward-outline',
+  back: 'arrow-back-outline',
+  refresh: 'refresh-outline',
+  edit: 'create-outline',
+  building: 'business-outline',
+  clock: 'time-outline',
+  download: 'download-outline',
+  filter: 'options-outline',
+  info: 'information-circle-outline',
+  chevron: 'chevron-down-outline',
+  close: 'close-outline',
+  history: 'time-outline',
+  shield: 'shield-outline',
+  more: 'ellipsis-horizontal-outline',
+  save: 'save-outline',
+  trash: 'trash-outline',
 };
+
 export function CoordinatorIcon({
   name,
   color = colors.muted,
   size = 20
 }) {
-  return <SymbolView name={iconNames[name]} tintColor={color} size={size} />;
+  const iconName = ioniconMap[name] || 'ellipse-outline';
+  return <Ionicons name={iconName} size={size} color={color} />;
 }
-const tabRoutes = {
-  Dashboard: '/(tabs)/dashboard',
-  Timetable: '/(tabs)/timetable',
-  Validation: '/(tabs)/validation',
-  Profile: '/(tabs)/profile'
-};
-const tabIcons = {
-  Dashboard: 'dashboard',
-  Timetable: 'calendar',
-  Validation: 'validation',
-  Profile: 'profile'
-};
+
 export function CoordinatorBottomNav({
-  activeTab
+  activeTab = 'Dashboard',
+  onTabChange
 }) {
-  const tabs = Object.keys(tabRoutes);
-  return <View style={styles.bottomNav} accessibilityRole="tablist" accessibilityLabel="Coordinator navigation">
+  const tabs = ['Dashboard', 'Timetable', 'Clashes', 'Profile'];
+  const tabIcons = {
+    Dashboard: 'dashboard',
+    Timetable: 'calendar',
+    Clashes: 'warning',
+    Profile: 'profile'
+  };
+
+  return (
+    <View style={styles.bottomNav} accessibilityRole="tablist" accessibilityLabel="Coordinator navigation">
       {tabs.map(tab => {
-      const active = tab === activeTab;
-      return <Pressable key={tab} accessibilityRole="tab" accessibilityState={{
-        selected: active
-      }} accessibilityLabel={`${tab} tab`} onPress={() => router.replace(tabRoutes[tab])} style={({
-        pressed
-      }) => [styles.navItem, pressed && styles.pressed]}>
-            <CoordinatorIcon name={tabIcons[tab]} color={active ? colors.primary : colors.muted} size={20} />
+        const active = tab === activeTab;
+        return (
+          <Pressable
+            key={tab}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={`${tab} tab`}
+            onPress={() => {
+              if (onTabChange) {
+                onTabChange(tab);
+              }
+            }}
+            style={({ pressed }) => [styles.navItem, pressed && styles.pressed]}
+          >
+            <CoordinatorIcon name={tabIcons[tab] || 'dashboard'} color={active ? colors.primary : colors.muted} size={20} />
             <Text style={[styles.navLabel, active && styles.navLabelActive]}>{tab}</Text>
-          </Pressable>;
-    })}
-    </View>;
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 }
+
 export function CoordinatorScaffold({
   title,
   eyebrow = 'ACADEMIA REGISTRAR',
   activeTab,
+  onTabChange,
   children,
   onBack,
   backLabel
 }) {
-  return <SafeAreaProvider>
+  return (
+    <SafeAreaProvider>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar barStyle="dark-content" backgroundColor={colors.pageBackground} />
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.topBar}>
             <View style={styles.topBarCopy}>
               <Text style={styles.eyebrow}>{eyebrow}</Text>
-              {onBack && backLabel ? <Pressable accessibilityRole="button" accessibilityLabel={backLabel} onPress={onBack} style={styles.backLink}>
+              {onBack && backLabel ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={backLabel} onPress={onBack} style={styles.backLink}>
                   <CoordinatorIcon name="back" color={colors.primary} size={16} />
                   <Text style={styles.backLabel}>{backLabel}</Text>
-                </Pressable> : null}
+                </Pressable>
+              ) : null}
               <Text style={styles.screenTitle}>{title}</Text>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Open coordinator profile" onPress={() => router.push('/(tabs)/profile')} style={({
-            pressed
-          }) => [styles.profileButton, pressed && styles.pressed]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open coordinator profile"
+              onPress={() => {
+                if (onTabChange) onTabChange('Profile');
+                else router.push('/profile');
+              }}
+              style={({ pressed }) => [styles.profileButton, pressed && styles.pressed]}
+            >
               <CoordinatorIcon name="profile" color={colors.primary} size={22} />
             </Pressable>
           </View>
-          <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.flex}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.pageContent}>{children}</View>
           </ScrollView>
-          <CoordinatorBottomNav activeTab={activeTab} />
+          <CoordinatorBottomNav activeTab={activeTab} onTabChange={onTabChange} />
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </SafeAreaProvider>;
+    </SafeAreaProvider>
+  );
 }
+
 export function SectionHeading({
   title,
   action,

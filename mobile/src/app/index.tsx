@@ -16,7 +16,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { loginAdminApi, loginStudentApi } from '../services/api';
+import { loginUnifiedApi } from '../services/api';
 
 const STORAGE_KEYS = {
   USER_ID: 'saved_user_id',
@@ -29,9 +29,6 @@ const INDIGO = '#4F46E5';
 export default function LoginScreen() {
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
-
-  const [selectedRole, setSelectedRole] =
-    useState<'Student' | 'Advisor' | 'Admin'>('Student');
 
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -130,169 +127,51 @@ export default function LoginScreen() {
     const id = userId.trim();
 
     if (!id || !password) {
-      setErrorMsg(
-        'Please enter your ID and Password',
-      );
-
+      setErrorMsg('Please enter your ID and Password');
       return;
     }
 
     setLoading(true);
-
     setErrorMsg('');
 
     try {
-      // =====================================================
-      // ADVISOR LOGIN
-      // =====================================================
-
-      if (selectedRole === 'Advisor') {
-        await saveOrClearCredentials(
-          id,
-          password,
-        );
-
-        router.replace(
-          '/Advisor/dashboard' as any,
-        );
-
+      const loginRes = await loginUnifiedApi(id, password);
+      if (!loginRes?.success || !loginRes.account) {
+        setErrorMsg(loginRes?.message || 'Invalid university ID or password.');
         return;
       }
 
-      // =====================================================
-      // ADMIN LOGIN
-      // =====================================================
+      await saveOrClearCredentials(id, password);
+      await AsyncStorage.removeItem('current_student_user');
+      await AsyncStorage.removeItem('current_admin_user');
 
-      if (selectedRole === 'Admin') {
-        const adminRes = await loginAdminApi(id, password);
+      const account = loginRes.account;
+      const role = (account.role || '').toLowerCase();
 
-        if (adminRes?.success) {
-          await saveOrClearCredentials(id, password);
-          if (adminRes.admin) {
-            await AsyncStorage.setItem('current_admin_user', JSON.stringify(adminRes.admin));
-          }
-
+      if (role === 'student') {
+        await AsyncStorage.setItem('current_student_user', JSON.stringify(account));
+        router.replace({ pathname: '/dashboard', params: { studentId: account.studentId || account.userId || id } });
+      } else {
+        await AsyncStorage.setItem('current_admin_user', JSON.stringify(account));
+        if (role.includes('advisor')) {
+          router.replace('/Advisor/dashboard' as any);
+        } else if (role.includes('coordinator')) {
+          router.replace('/coordinator-dashboard' as any);
+        } else {
           router.replace({
-            pathname: '/admin',
+            pathname: '/admin-dashboard',
             params: {
-              adminId: adminRes.admin?.adminId || id,
-              adminName: adminRes.admin?.name || 'Administrator',
-              adminRole: adminRes.admin?.role || 'Administrator',
-              adminDept: adminRes.admin?.department || 'Academic Affairs',
+              adminId: account.adminId || account.userId || id,
+              adminName: account.name || 'Administrator',
+              adminRole: account.role || 'Administrator',
+              adminDept: account.department || 'Academic Affairs',
             },
           });
-        } else {
-          setErrorMsg('Invalid Admin ID or password.');
         }
-
-        return;
       }
-
-      // =====================================================
-      // STUDENT LOGIN
-      // =====================================================
-
-      const studentRes =
-        await loginStudentApi(
-          id,
-          password,
-        );
-
-      if (studentRes?.success) {
-        await saveOrClearCredentials(
-          id,
-          password,
-        );
-
-        router.replace({
-          pathname: '/dashboard',
-
-          params: {
-            studentId: id,
-          },
-        });
-
-        return;
-      }
-
-      // =====================================================
-      // INVALID LOGIN
-      // =====================================================
-
-      setErrorMsg(
-        'Invalid ID or password. Please try again.',
-      );
     } catch (err: any) {
-      /*
-       * =====================================================
-       * HCI / DEMO OFFLINE FALLBACK
-       * =====================================================
-       *
-       * If backend connection fails,
-       * allow navigation during the prototype demo.
-       *
-       * Remove this fallback in production.
-       */
-
-      console.warn(
-        'Login request error, proceeding with offline preview:',
-        err?.message,
-      );
-
-      await saveOrClearCredentials(
-        id,
-        password,
-      );
-
-      // =====================================================
-      // ADVISOR FALLBACK
-      // =====================================================
-
-      if (selectedRole === 'Advisor') {
-        router.replace(
-          '/Advisor/dashboard' as any,
-        );
-      }
-
-      // =====================================================
-      // ADMIN FALLBACK
-      // =====================================================
-
-      else if (
-        selectedRole === 'Admin' ||
-        id.toUpperCase().startsWith('ADM')
-      ) {
-        router.replace({
-          pathname: '/admin',
-
-          params: {
-            adminId: id,
-
-            adminName:
-              'Dr. Sarah Mitchell',
-
-            adminRole:
-              'Administrator',
-
-            adminDept:
-              'Academic Affairs',
-          },
-        });
-      }
-
-      // =====================================================
-      // STUDENT FALLBACK
-      // =====================================================
-
-      else {
-        router.replace({
-          pathname: '/dashboard',
-
-          params: {
-            studentId: id,
-          },
-        });
-      }
+      console.warn('Login request failed:', err?.message);
+      setErrorMsg(err?.message || 'Unable to sign in. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -442,63 +321,9 @@ export default function LoginScreen() {
                 styles.heroSub
               }
             >
-              Sign in with your
-              university ID to access
-              courses and timetable.
+              Sign in with your university ID. Your account role is detected automatically.
             </Text>
 
-            {/* ROLE SELECTOR */}
-
-            <View
-              style={
-                styles.roleSelectorRow
-              }
-            >
-              {(
-                [
-                  'Student',
-                  'Advisor',
-                  'Admin',
-                ] as const
-              ).map((role) => {
-                const isActive =
-                  selectedRole ===
-                  role;
-
-                return (
-                  <TouchableOpacity
-                    key={role}
-                    style={[
-                      styles.roleChip,
-
-                      isActive &&
-                        styles.roleChipActive,
-                    ]}
-                    onPress={() => {
-                      setSelectedRole(
-                        role,
-                      );
-
-                      setErrorMsg('');
-                    }}
-                    activeOpacity={
-                      0.8
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.roleChipText,
-
-                        isActive &&
-                          styles.roleChipTextActive,
-                      ]}
-                    >
-                      {role}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
           </View>
 
           {/* ============================================= */}
@@ -541,7 +366,7 @@ export default function LoginScreen() {
                 styles.fieldLabel
               }
             >
-              UNIVERSITY ID
+              UNIVERSITY ID / USER ID
             </Text>
 
             <View
@@ -566,7 +391,7 @@ export default function LoginScreen() {
                 onChangeText={
                   handleUserIdChange
                 }
-                placeholder="e.g. IT21047138 or ADM001"
+                placeholder="e.g. STU1001 or ADM001"
                 placeholderTextColor="#94A3B8"
                 autoCapitalize="characters"
                 autoCorrect={
@@ -999,52 +824,6 @@ const styles = StyleSheet.create({
     color: '#64748B',
 
     lineHeight: 20,
-  },
-
-  // =========================================================
-  // ROLE SELECTOR
-  // =========================================================
-
-  roleSelectorRow: {
-    flexDirection: 'row',
-
-    gap: 10,
-
-    marginTop: 14,
-  },
-
-  roleChip: {
-    backgroundColor:
-      '#EEF2FF',
-
-    borderWidth: 1,
-
-    borderColor:
-      '#E0E7FF',
-
-    borderRadius: 999,
-
-    paddingHorizontal: 14,
-
-    paddingVertical: 6,
-  },
-
-  roleChipActive: {
-    backgroundColor: INDIGO,
-
-    borderColor: INDIGO,
-  },
-
-  roleChipText: {
-    color: '#4338CA',
-
-    fontSize: 12,
-
-    fontWeight: '600',
-  },
-
-  roleChipTextActive: {
-    color: '#FFFFFF',
   },
 
   // =========================================================
