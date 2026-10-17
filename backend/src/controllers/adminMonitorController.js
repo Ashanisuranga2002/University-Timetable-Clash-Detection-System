@@ -1,7 +1,13 @@
+// ===============================================================
+// Admin Monitor Controller
+// Manages microservice health monitors, real probe execution, and alert correlation
+// ===============================================================
+
 const mongoose = require("mongoose");
 const Monitor = require("../models/Monitor");
 const Alert = require("../models/Alert");
 
+// Initial sample monitor fixtures seeded if database collection is empty
 const INITIAL_MONITORS = [
   {
     monitorId: "MON-01",
@@ -53,6 +59,7 @@ const INITIAL_MONITORS = [
   },
 ];
 
+// Seed default monitors into database if collection is empty
 async function ensureSeedMonitors() {
   const count = await Monitor.countDocuments();
   if (count === 0) {
@@ -60,8 +67,11 @@ async function ensureSeedMonitors() {
   }
 }
 
-// Real health check probe executor for a monitor
+// ---------------------------------------------------------------
+// Execute Probe: Runs a live health check on a specific monitor
+// ---------------------------------------------------------------
 async function executeProbe(monitor) {
+  // If the monitor is disabled, mark as offline immediately
   if (!monitor.enabled) {
     monitor.status = "offline";
     monitor.healthStatus = "Offline";
@@ -75,7 +85,7 @@ async function executeProbe(monitor) {
   let measuredDuration = null;
   let statusNote = "";
 
-  // 1. Database Primary Cluster / MongoDB ping check
+  // Strategy 1: Database Primary Cluster / MongoDB ping check
   if (
     monitor.serviceType === "Database" ||
     (monitor.endpoint && monitor.endpoint.startsWith("mongodb")) ||
@@ -97,7 +107,7 @@ async function executeProbe(monitor) {
       statusNote = err.message;
     }
   }
-  // 2. HTTP / HTTPS endpoints
+  // Strategy 2: HTTP / HTTPS endpoints
   else if (
     monitor.endpoint &&
     (monitor.endpoint.startsWith("http://") || monitor.endpoint.startsWith("https://"))
@@ -131,7 +141,7 @@ async function executeProbe(monitor) {
       statusNote = err.name === "AbortError" ? "Connection timeout (3.5s)" : err.message;
     }
   }
-  // 3. Internal Application Services
+  // Strategy 3: Internal Application Services (Node.js runtime heap)
   else {
     measuredDuration = Date.now() - startTime;
     const heapUsed = process.memoryUsage().heapUsed;
@@ -162,7 +172,7 @@ async function executeProbe(monitor) {
   monitor.lastChecked = new Date();
   await monitor.save();
 
-  // Alert correlation logic
+  // Alert correlation: automatically file incident if service degraded or offline
   if (monitor.healthStatus === "Critical" || monitor.status === "offline") {
     const existingAlert = await Alert.findOne({
       service: monitor.serviceName,
@@ -192,6 +202,7 @@ async function executeProbe(monitor) {
       await existingAlert.save();
     }
   } else if (monitor.healthStatus === "Healthy") {
+    // Auto-resolve any pending incident when service returns to healthy
     const existingActiveAlert = await Alert.findOne({
       service: monitor.serviceName,
       state: "active",
@@ -208,7 +219,9 @@ async function executeProbe(monitor) {
   return monitor;
 }
 
-// GET /api/admin/monitors
+// ---------------------------------------------------------------
+// GET /api/admin/monitors: Retrieve all monitors
+// ---------------------------------------------------------------
 exports.getMonitors = async (req, res) => {
   try {
     await ensureSeedMonitors();
@@ -219,7 +232,9 @@ exports.getMonitors = async (req, res) => {
   }
 };
 
-// GET /api/admin/monitors/:id
+// ---------------------------------------------------------------
+// GET /api/admin/monitors/:id: Retrieve single monitor by ID
+// ---------------------------------------------------------------
 exports.getMonitorById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -235,7 +250,9 @@ exports.getMonitorById = async (req, res) => {
   }
 };
 
-// POST /api/admin/monitors
+// ---------------------------------------------------------------
+// POST /api/admin/monitors: Create a new monitor entry
+// ---------------------------------------------------------------
 exports.createMonitor = async (req, res) => {
   try {
     const { monitorId, serviceName, serviceType, description, endpoint, interval, status, healthStatus, enabled } =
@@ -272,7 +289,9 @@ exports.createMonitor = async (req, res) => {
   }
 };
 
-// PUT /api/admin/monitors/:id
+// ---------------------------------------------------------------
+// PUT /api/admin/monitors/:id: Update existing monitor details
+// ---------------------------------------------------------------
 exports.updateMonitor = async (req, res) => {
   try {
     const { id } = req.params;
@@ -302,7 +321,9 @@ exports.updateMonitor = async (req, res) => {
   }
 };
 
-// DELETE /api/admin/monitors/:id
+// ---------------------------------------------------------------
+// DELETE /api/admin/monitors/:id: Delete a monitor from database
+// ---------------------------------------------------------------
 exports.deleteMonitor = async (req, res) => {
   try {
     const { id } = req.params;
@@ -320,7 +341,9 @@ exports.deleteMonitor = async (req, res) => {
   }
 };
 
-// PATCH /api/admin/monitors/:id/status
+// ---------------------------------------------------------------
+// PATCH /api/admin/monitors/:id/status: Toggle enable or update status
+// ---------------------------------------------------------------
 exports.updateMonitorStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -345,7 +368,9 @@ exports.updateMonitorStatus = async (req, res) => {
   }
 };
 
-// POST /api/admin/monitors/:id/check
+// ---------------------------------------------------------------
+// POST /api/admin/monitors/:id/check: Trigger an on-demand probe
+// ---------------------------------------------------------------
 exports.checkMonitor = async (req, res) => {
   try {
     const { id } = req.params;
@@ -367,7 +392,9 @@ exports.checkMonitor = async (req, res) => {
   }
 };
 
-// POST /api/admin/monitors/check-all
+// ---------------------------------------------------------------
+// POST /api/admin/monitors/check-all: Probe all registered monitors
+// ---------------------------------------------------------------
 exports.checkAllMonitors = async (req, res) => {
   try {
     const monitors = await Monitor.find();
@@ -386,3 +413,4 @@ exports.checkAllMonitors = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+

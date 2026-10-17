@@ -1,15 +1,22 @@
+// ===============================================================
+// Admin Telemetry Chart Component
+// Pure React Native geometric line chart visualizing system load and latency over time
+// ===============================================================
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { TelemetryPoint } from '@/constants/adminMonitoringData';
 import { AC } from '@/constants/adminTheme';
 
+// Component props
 interface TelemetryChartProps {
-  data: TelemetryPoint[];
-  height?: number;
-  showSurge?: boolean;
+  data: TelemetryPoint[];   // Array of time-series datapoints (load % and latency ms)
+  height?: number;          // Total chart height in pixels
+  showSurge?: boolean;      // Whether to render the enrollment surge indicator bubble
 }
 
 export function TelemetryChart({ data, height = 120, showSurge = false }: TelemetryChartProps) {
+  // Chart coordinate scaling bounds
   const maxLoad = 100;
   const maxLatency = 60;
   const padL = 8;
@@ -20,19 +27,24 @@ export function TelemetryChart({ data, height = 120, showSurge = false }: Teleme
   const step = data.length > 1 ? chartW / (data.length - 1) : chartW;
   const gridLines = [0, 0.25, 0.5, 0.75, 1];
 
+  // Calculate pixel coordinates (x, y) for the load percentage line
   const loadPts = data.map((d, i) => ({
     x: padL + i * step,
     y: padT + chartH - (d.load / maxLoad) * chartH,
   }));
+
+  // Calculate pixel coordinates (x, y) for the latency response line
   const latPts = data.map((d, i) => ({
     x: padL + i * step,
     y: padT + chartH - (d.latency / maxLatency) * chartH,
   }));
 
+  // Detect index where load peaked above 63% for surge overlay
   const surgeIdx = data.findIndex(d => d.load >= 63);
 
   return (
     <View style={[styles.chartOuter, { height: height + 20 }]}>
+
       {gridLines.map((ratio, i) => (
         <View
           key={i}

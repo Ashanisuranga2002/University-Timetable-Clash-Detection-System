@@ -1,3 +1,8 @@
+// ===============================================================
+// Admin Monitor Details Screen
+// Inspects service endpoints, ping intervals, response times, and allows deletion/edits
+// ===============================================================
+
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -22,12 +27,14 @@ import {
 
 export default function MonitorDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  // Screen state
   const [monitor, setMonitor] = useState<AdminMonitor | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch monitor details from backend
   const loadMonitor = async () => {
     if (!id) return;
     setLoading(true);
@@ -46,6 +53,7 @@ export default function MonitorDetailsScreen() {
     loadMonitor();
   }, [id]);
 
+  // Toggle active monitoring flag
   const handleToggle = async () => {
     if (!monitor) return;
     const nextState = !monitor.enabled;
@@ -58,6 +66,7 @@ export default function MonitorDetailsScreen() {
   };
 
   const handleDelete = () => {
+
     setShowDeleteModal(true);
   };
 

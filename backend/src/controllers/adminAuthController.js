@@ -1,12 +1,20 @@
+// ===============================================================
+// Admin Authentication Controller
+// Handles login verification, profile retrieval, and profile updates for admins
+// ===============================================================
+
 const bcrypt = require("bcryptjs");
 const Admin = require("../models/Admin");
 const User = require("../models/User");
 
-// Admin Login
+// ---------------------------------------------------------------
+// Admin Login: Authenticates administrator credentials
+// ---------------------------------------------------------------
 const loginAdmin = async (req, res) => {
   try {
     const { adminId, password } = req.body;
 
+    // Validate that required credentials were provided
     if (!adminId || !password) {
       return res.status(400).json({
         success: false,
@@ -16,7 +24,7 @@ const loginAdmin = async (req, res) => {
 
     const cleanId = adminId.trim();
 
-    // 1. Try finding in Admin collection
+    // Step 1: Check in the dedicated Admin collection
     let admin = await Admin.findOne({
       $or: [{ adminId: cleanId }, { email: cleanId.toLowerCase() }],
     });
@@ -25,9 +33,10 @@ const loginAdmin = async (req, res) => {
     let isUserModel = false;
 
     if (admin) {
+      // Compare submitted plain text password with stored bcrypt hash
       isPasswordValid = await bcrypt.compare(password, admin.passwordHash);
     } else {
-      // 2. Fallback: try finding in User collection with Administrator role
+      // Step 2: Fallback - check in User collection for Administrator role accounts
       const userAdmin = await User.findOne({
         $or: [{ userId: cleanId.toUpperCase() }, { email: cleanId.toLowerCase() }],
         role: "Administrator",
@@ -42,6 +51,7 @@ const loginAdmin = async (req, res) => {
       }
     }
 
+    // Reject if no matching administrator found or password does not match
     if (!admin || !isPasswordValid) {
       return res.status(401).json({
         success: false,
@@ -49,12 +59,13 @@ const loginAdmin = async (req, res) => {
       });
     }
 
-    // Update last login
+    // Record the current login timestamp for the Admin account
     if (!isUserModel) {
       admin.lastLogin = new Date();
       await admin.save();
     }
 
+    // Prepare safe response object without exposing the password hash
     const responseAdmin = {
       id: admin._id,
       adminId: admin.adminId || admin.userId,
@@ -68,6 +79,7 @@ const loginAdmin = async (req, res) => {
       lastLogin: admin.lastLogin || new Date(),
     };
 
+    // Return successful response with admin profile data
     res.status(200).json({
       success: true,
       message: "Admin login successful",
@@ -75,6 +87,7 @@ const loginAdmin = async (req, res) => {
       data: responseAdmin,
     });
   } catch (error) {
+    // Handle unexpected server errors
     res.status(500).json({
       success: false,
       message: "Login failed",
@@ -83,9 +96,12 @@ const loginAdmin = async (req, res) => {
   }
 };
 
-// Get admin profile
+// ---------------------------------------------------------------
+// Get Admin Profile: Retrieves current admin's information
+// ---------------------------------------------------------------
 const getAdminProfile = async (req, res) => {
   try {
+    // Extract target identifier from route parameters, query, or request headers
     const targetId =
       req.params.adminId ||
       req.query.adminId ||
@@ -98,6 +114,7 @@ const getAdminProfile = async (req, res) => {
       const cleanId = targetId.trim();
       const isObjectId = cleanId.match(/^[0-9a-fA-F]{24}$/);
 
+      // Search in Admin collection first
       admin = await Admin.findOne({
         $or: [
           { adminId: cleanId },
@@ -106,6 +123,7 @@ const getAdminProfile = async (req, res) => {
         ],
       }).select("-passwordHash");
 
+      // If not in Admin collection, check User collection
       if (!admin) {
         const userAdmin = await User.findOne({
           $or: [
@@ -131,14 +149,16 @@ const getAdminProfile = async (req, res) => {
         }
       }
     } else {
-      // Find the first admin if no ID provided
+      // If no ID was provided, return the first available administrator
       admin = await Admin.findOne().select("-passwordHash");
     }
 
+    // Return 404 if no administrator record is found
     if (!admin) {
       return res.status(404).json({ success: false, message: "Admin profile not found" });
     }
 
+    // Format safe profile payload
     const data = {
       id: admin._id || admin.id,
       adminId: admin.adminId || admin.userId,
@@ -158,7 +178,9 @@ const getAdminProfile = async (req, res) => {
   }
 };
 
-// Update safe admin profile fields (name, department)
+// ---------------------------------------------------------------
+// Update Admin Profile: Safely updates editable fields (name, department)
+// ---------------------------------------------------------------
 const updateAdminProfile = async (req, res) => {
   try {
     const targetId =
@@ -174,15 +196,19 @@ const updateAdminProfile = async (req, res) => {
     }
 
     const cleanId = targetId.trim();
+
+    // Look up in Admin collection
     let admin = await Admin.findOne({
       $or: [{ adminId: cleanId }, { email: cleanId.toLowerCase() }],
     });
 
     if (admin) {
+      // Update safe fields if provided
       if (name && name.trim()) admin.name = name.trim();
       if (department && department.trim()) admin.department = department.trim();
       await admin.save();
     } else {
+      // Look up in User collection
       const userAdmin = await User.findOne({
         $or: [{ userId: cleanId.toUpperCase() }, { email: cleanId.toLowerCase() }],
       });
@@ -198,6 +224,7 @@ const updateAdminProfile = async (req, res) => {
       return res.status(404).json({ success: false, message: "Admin not found" });
     }
 
+    // Prepare updated response payload
     const updated = {
       id: admin._id,
       adminId: admin.adminId || admin.userId,
@@ -220,4 +247,6 @@ const updateAdminProfile = async (req, res) => {
   }
 };
 
+// Export controller methods
 module.exports = { loginAdmin, getAdminProfile, updateAdminProfile };
+

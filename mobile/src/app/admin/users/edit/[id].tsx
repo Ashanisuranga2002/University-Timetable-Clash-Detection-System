@@ -1,3 +1,8 @@
+// ===============================================================
+// Admin Edit User Screen
+// Form allowing administrators to modify user details (name, email, role, department, status)
+// ===============================================================
+
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -16,6 +21,7 @@ import { AdminHeader } from '@/components/admin/AdminHeader';
 import { AC, AR, AS } from '@/constants/adminTheme';
 import { fetchUserByIdApi, updateUserApi, AdminUser } from '@/services/api';
 
+// Available user role categories
 const AVAILABLE_ROLES: AdminUser['role'][] = [
   'Student',
   'Academic Advisor',
@@ -24,11 +30,13 @@ const AVAILABLE_ROLES: AdminUser['role'][] = [
   'Administrator',
 ];
 
+// Available account status options
 const AVAILABLE_STATUSES: AdminUser['status'][] = ['Active', 'Inactive', 'Suspended'];
 
 export default function EditUserScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
+  // Form input field and submission states
   const [initialLoading, setInitialLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -41,6 +49,7 @@ export default function EditUserScreen() {
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  // Fetch current user details on mount
   useEffect(() => {
     async function loadUser() {
       if (!id) return;
@@ -58,6 +67,7 @@ export default function EditUserScreen() {
       } catch (err: any) {
         Alert.alert('Error', err?.message || 'Failed to load user info');
       } finally {
+
         setInitialLoading(false);
       }
     }

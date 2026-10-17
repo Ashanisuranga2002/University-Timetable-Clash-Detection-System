@@ -1,3 +1,8 @@
+// ===============================================================
+// Admin Incident Alerts Screen
+// Incident triage, real-time alert filters, resolution notes, and probe correlations
+// ===============================================================
+
 import React, { useCallback, useState } from 'react';
 import {
   View,
@@ -25,9 +30,13 @@ import {
   fetchMonitorsApi,
 } from '@/services/api';
 
+// Severity categories for alerts
 export type AlertSeverity = 'high' | 'medium' | 'low';
+
+// Workflow lifecycle states for alerts
 export type AlertState = 'active' | 'monitoring' | 'resolved' | 'acknowledged';
 
+// Interface representing an alert incident
 export interface MonitoringAlert {
   id: string;
   title: string;
@@ -46,15 +55,20 @@ export interface MonitoringAlert {
   createdAt?: string;
 }
 
+// Interface representing a cluster monitor node
 export interface MonitorNode {
   id: string;
   label: string;
   state: 'healthy' | 'warning' | 'critical';
 }
 
+// Filter key types for tab selection
 type FilterKey = 'all' | AlertSeverity;
 type StateFilterKey = 'all' | 'active' | 'acknowledged' | 'resolved';
 
+// ---------------------------------------------------------------
+// Subcomponent: Mini sparkline visualizer for high severity spikes
+// ---------------------------------------------------------------
 function MiniSparkline({ color }: { color: string }) {
   const points = [30, 45, 35, 55, 48, 70, 65];
   return (
@@ -65,6 +79,7 @@ function MiniSparkline({ color }: { color: string }) {
     </View>
   );
 }
+
 
 const sparkStyles = StyleSheet.create({
   container: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 35 },

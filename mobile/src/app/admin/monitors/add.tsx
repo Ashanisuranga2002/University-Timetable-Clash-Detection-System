@@ -1,3 +1,8 @@
+// ===============================================================
+// Admin Add Monitor Screen
+// Form for registering a new microservice or cluster endpoint health probe
+// ===============================================================
+
 import React, { useState } from 'react';
 import {
   View,
@@ -17,6 +22,7 @@ import { AdminHeader } from '@/components/admin/AdminHeader';
 import { AC, AR, AS } from '@/constants/adminTheme';
 import { AdminMonitor, createMonitorApi } from '@/services/api';
 
+// Permitted service categories
 const SERVICE_TYPES: AdminMonitor['serviceType'][] = [
   'Service',
   'Engine',
@@ -26,11 +32,14 @@ const SERVICE_TYPES: AdminMonitor['serviceType'][] = [
   'Worker',
 ];
 
+// Health check heartbeat intervals
 const INTERVAL_OPTIONS = ['10s', '15s', '30s', '60s', '5m'];
 
+// Initial health status options
 const HEALTH_OPTIONS: AdminMonitor['healthStatus'][] = ['Healthy', 'Warning', 'Critical', 'Offline'];
 
 export default function AddMonitorScreen() {
+  // Form input states
   const [serviceName, setServiceName] = useState('');
   const [serviceType, setServiceType] = useState<AdminMonitor['serviceType']>('Service');
   const [description, setDescription] = useState('');
@@ -42,6 +51,7 @@ export default function AddMonitorScreen() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  // Client-side field validation
   const validate = () => {
     const newErrors: { [key: string]: string } = {};
 
@@ -58,6 +68,7 @@ export default function AddMonitorScreen() {
   };
 
   const handleSave = async () => {
+
     if (!validate()) return;
 
     setLoading(true);

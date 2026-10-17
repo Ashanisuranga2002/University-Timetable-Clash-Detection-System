@@ -1,3 +1,9 @@
+// ===============================================================
+// Admin User Details Screen
+// Displays profile info, department, account status, role credentials,
+// and provides action controls for status toggle, editing, and deletion
+// ===============================================================
+
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -16,12 +22,14 @@ import { AdminUser, deleteUserApi, fetchUserByIdApi, patchUserStatusApi } from '
 
 export default function UserDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  // Screen state
   const [user, setUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Fetch user profile from backend
   const loadUser = async () => {
     if (!id) return;
     setLoading(true);
@@ -48,6 +56,7 @@ export default function UserDetailsScreen() {
     setShowActionModal(true);
   };
 
+  // Toggle user account status between Active and Inactive
   const handleToggleStatus = async () => {
     if (!user) return;
     const isCurrentlyActive = user.status === 'Active';
@@ -58,6 +67,7 @@ export default function UserDetailsScreen() {
       setShowActionModal(false);
       await loadUser();
       Alert.alert('Success', `User status set to ${newStatus}.`);
+
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to update user status');
     } finally {

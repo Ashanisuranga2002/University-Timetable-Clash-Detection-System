@@ -1,3 +1,8 @@
+// ===============================================================
+// Admin General Controller
+// Handles admin dashboard stats, course administration, and system telemetry
+// ===============================================================
+
 const os = require("os");
 const Course = require("../models/Course");
 const Registration = require("../models/Registration");
@@ -7,7 +12,9 @@ const Monitor = require("../models/Monitor");
 const Alert = require("../models/Alert");
 const Clash = require("../models/Clash");
 
-// Admin: Create a new course
+// ---------------------------------------------------------------
+// Create Course: Adds a new academic course to the system
+// ---------------------------------------------------------------
 const createCourse = async (req, res) => {
   try {
     const {
@@ -22,6 +29,7 @@ const createCourse = async (req, res) => {
       slots,
     } = req.body;
 
+    // Validate required course fields
     if (!courseCode || !courseName || !credits || !semester || !type) {
       return res.status(400).json({
         success: false,
@@ -29,6 +37,7 @@ const createCourse = async (req, res) => {
       });
     }
 
+    // Check if course with this code already exists
     const existing = await Course.findOne({ courseCode: courseCode.toUpperCase() });
     if (existing) {
       return res.status(409).json({
@@ -37,6 +46,7 @@ const createCourse = async (req, res) => {
       });
     }
 
+    // Create and save the new course
     const course = await Course.create({
       courseCode: courseCode.toUpperCase(),
       courseName,
@@ -64,16 +74,20 @@ const createCourse = async (req, res) => {
   }
 };
 
-// Admin: Update an existing course
+// ---------------------------------------------------------------
+// Update Course: Modifies details of an existing course
+// ---------------------------------------------------------------
 const updateCourse = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Locate target course
     let course = await Course.findById(id);
     if (!course) {
       return res.status(404).json({ success: false, message: "Course not found" });
     }
 
+    // Apply updates and save
     Object.assign(course, req.body);
     await course.save();
 
@@ -83,11 +97,14 @@ const updateCourse = async (req, res) => {
   }
 };
 
-// Admin: Delete (deactivate) a course
+// ---------------------------------------------------------------
+// Delete Course: Soft-deletes (deactivates) a course
+// ---------------------------------------------------------------
 const deleteCourse = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Mark isActive as false instead of destroying the record
     const course = await Course.findByIdAndUpdate(
       id,
       { isActive: false },
@@ -104,9 +121,12 @@ const deleteCourse = async (req, res) => {
   }
 };
 
-// Admin: Get admin dashboard summary
+// ---------------------------------------------------------------
+// Get Admin Dashboard: High-level counts for academic data
+// ---------------------------------------------------------------
 const getAdminDashboard = async (req, res) => {
   try {
+    // Concurrently fetch counts and recent entries
     const [
       totalCourses,
       totalStudents,
@@ -131,6 +151,7 @@ const getAdminDashboard = async (req, res) => {
       Student.find().sort({ createdAt: -1 }).limit(5).select("studentId name programme semester createdAt").lean(),
     ]);
 
+    // Return academic summary
     res.status(200).json({
       success: true,
       stats: {
@@ -155,7 +176,9 @@ const getAdminDashboard = async (req, res) => {
   }
 };
 
-// Admin: Get all courses (including inactive if ?all=true)
+// ---------------------------------------------------------------
+// Get All Courses: Returns list of courses with optional inactive flag
+// ---------------------------------------------------------------
 const getAllCoursesAdmin = async (req, res) => {
   try {
     const showAll = req.query.all === "true";
@@ -169,9 +192,13 @@ const getAllCoursesAdmin = async (req, res) => {
   }
 };
 
-// Admin: Get real aggregated Admin Dashboard statistics
+// ---------------------------------------------------------------
+// Get Admin Dashboard Stats: Aggregated live operational telemetry
+// Computes live counts, health states, average latency, and system load
+// ---------------------------------------------------------------
 const getAdminDashboardStats = async (req, res) => {
   try {
+    // Run database queries in parallel for optimal performance
     const [
       totalUsers,
       activeUsers,
@@ -212,7 +239,7 @@ const getAdminDashboardStats = async (req, res) => {
       Alert.find({ state: { $ne: "resolved" } }).sort({ createdAt: -1 }).limit(5),
     ]);
 
-    // System health evaluation based on actual monitors
+    // 1. Calculate overall system health based on active monitors
     const enabledMonitors = monitorsList.filter((m) => m.enabled);
     const totalEnabled = enabledMonitors.length;
 
@@ -230,7 +257,7 @@ const getAdminDashboardStats = async (req, res) => {
       }
     }
 
-    // Average response time from actual monitor records
+    // 2. Compute average latency across enabled monitors
     let totalLatency = 0;
     let latencyCount = 0;
     enabledMonitors.forEach((m) => {
@@ -246,13 +273,14 @@ const getAdminDashboardStats = async (req, res) => {
     const averageResponseTime =
       latencyCount > 0 ? (totalLatency / latencyCount).toFixed(2) + "s" : null;
 
-    // Real system load and runtime metrics from Node.js OS
+    // 3. Collect host OS and Node.js process resource metrics
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
     const memUsagePercent = Math.round(((totalMem - freeMem) / totalMem) * 100);
     const loadAvg = os.loadavg()[0];
     const uptimeSec = Math.round(process.uptime());
 
+    // Send complete aggregated dashboard payload
     res.status(200).json({
       success: true,
       data: {
@@ -326,6 +354,7 @@ const getAdminDashboardStats = async (req, res) => {
   }
 };
 
+// Export all general admin handlers
 module.exports = {
   createCourse,
   updateCourse,
@@ -334,3 +363,4 @@ module.exports = {
   getAdminDashboardStats,
   getAllCoursesAdmin,
 };
+

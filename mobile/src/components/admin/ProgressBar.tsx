@@ -1,12 +1,18 @@
+// ===============================================================
+// Admin ProgressBar Component
+// Smooth animated linear progress bar used in telemetry metrics and system load cards
+// ===============================================================
+
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
 import { AC } from '@/constants/adminTheme';
 
+// Component props
 interface ProgressBarProps {
-  progress: number;
-  color?: string;
-  height?: number;
-  animated?: boolean;
+  progress: number;   // Value between 0.0 and 1.0 (0% to 100%)
+  color?: string;     // Fill color (defaults to primary indigo)
+  height?: number;    // Height in pixels (defaults to 4)
+  animated?: boolean; // Whether to animate the width transition
 }
 
 export function ProgressBar({
@@ -15,8 +21,10 @@ export function ProgressBar({
   height = 4,
   animated = true,
 }: ProgressBarProps) {
+  // Animated value tracking the current fill percentage
   const anim = useRef(new Animated.Value(0)).current;
 
+  // Trigger smooth transition whenever the progress value changes
   useEffect(() => {
     if (animated) {
       Animated.timing(anim, {
@@ -29,6 +37,7 @@ export function ProgressBar({
     }
   }, [progress, animated, anim]);
 
+  // Interpolate numerical 0..1 range into percentage string for CSS width
   const width = anim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0%', '100%'],
@@ -41,6 +50,7 @@ export function ProgressBar({
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   track: {

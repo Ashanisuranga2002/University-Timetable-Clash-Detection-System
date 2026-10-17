@@ -1,13 +1,22 @@
 // ============================================================
-// Admin Monitoring — Centralized Mock Data
+// Admin Monitoring — Centralized Mock Data & Type Definitions
 // University Timetable Clash Detection System
+// Provides fallback data structures and initial telemetry fixtures
 // ============================================================
 
+// Status of a service: online (healthy), warning (degraded), or offline
 export type ServiceStatus = 'online' | 'warning' | 'offline';
+
+// Severity level of system incident alerts
 export type AlertSeverity = 'high' | 'medium' | 'low';
+
+// Workflow lifecycle state for an alert
 export type AlertState = 'active' | 'monitoring' | 'resolved' | 'acknowledged';
+
+// Health status for cluster nodes
 export type NodeState = 'healthy' | 'warning' | 'critical';
 
+// Interface representing an infrastructure service monitor
 export interface InfrastructureService {
   id: string;
   name: string;
@@ -19,6 +28,7 @@ export interface InfrastructureService {
   pod?: string;
 }
 
+// Interface representing an alert incident
 export interface MonitoringAlert {
   id: string;
   title: string;
@@ -36,18 +46,21 @@ export interface MonitoringAlert {
   ttr?: string;
 }
 
+// Interface for a regional cluster compute node
 export interface RegionalNode {
   id: string;
   label: string;
   state: NodeState;
 }
 
+// Interface for telemetry chart datapoints
 export interface TelemetryPoint {
   label: string;
   load: number;
   latency: number;
 }
 
+// Fallback baseline system health information
 export const systemHealth = {
   status: 'Healthy' as const,
   server: 'AU-CAMPUS-CORE-01',
@@ -57,11 +70,13 @@ export const systemHealth = {
   latencyMs: 8,
 };
 
+// Top dashboard metric benchmarks
 export const topMetrics = {
   latency: { value: '1.2s', label: 'Optimal', progress: 0.4 },
   sysLoad: { value: '65%', label: 'Peak 71%', progress: 0.65 },
   sessions: { value: '1,240', label: 'Enrollment', progress: 0.62 },
 };
+
 
 export const coreServices: InfrastructureService[] = [
   {

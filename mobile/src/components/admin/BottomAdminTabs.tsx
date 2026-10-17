@@ -1,3 +1,8 @@
+// ===============================================================
+// Bottom Admin Navigation Tabs
+// Floating persistent bottom bar with active indicator and badge count
+// ===============================================================
+
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { router, usePathname } from 'expo-router';
@@ -5,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AC } from '@/constants/adminTheme';
 import { fetchAlertsApi } from '@/services/api';
 
+// Interface defining navigation tab item structure
 interface Tab {
   name: string;
   label: string;
@@ -12,6 +18,7 @@ interface Tab {
   icon: string;
 }
 
+// Navigation tabs for the Admin portal
 const TABS: Tab[] = [
   { name: 'dashboard', label: 'Dashboard', route: '/admin', icon: '📊' },
   { name: 'monitor', label: 'Monitor', route: '/admin/service-status', icon: '🖥' },
@@ -19,6 +26,7 @@ const TABS: Tab[] = [
   { name: 'profile', label: 'Profile', route: '/admin/profile', icon: '👤' },
 ];
 
+// Helper to determine if a tab is currently active based on the current pathname
 function matchesTab(pathname: string, tab: Tab): boolean {
   if (tab.route === '/admin') {
     return pathname === '/admin' || pathname === '/admin/index';
@@ -32,8 +40,10 @@ function matchesTab(pathname: string, tab: Tab): boolean {
 export function BottomAdminTabs() {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  // State for number of active unaddressed alerts
   const [activeAlertsCount, setActiveAlertsCount] = useState<number>(0);
 
+  // Poll or refresh active alert badge count on route change
   useEffect(() => {
     let isMounted = true;
     async function loadAlertsCount() {
@@ -56,6 +66,7 @@ export function BottomAdminTabs() {
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+
       {TABS.map(tab => {
         const active = matchesTab(pathname, tab);
         const badgeCount = tab.name === 'alerts' ? activeAlertsCount : 0;

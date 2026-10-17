@@ -1,3 +1,9 @@
+// ===============================================================
+// Admin Monitors List Screen
+// Lists all registered microservice health probes with filtering,
+// live status toggles, deletion confirmation modal, and direct links to edit/add
+// ===============================================================
+
 import React, { useCallback, useState } from 'react';
 import {
   View,
@@ -21,18 +27,20 @@ import {
   updateMonitorApi,
 } from '@/services/api';
 
+// Filter options by monitor health status
 const STATUS_FILTERS = ['All', 'Healthy', 'Warning', 'Critical', 'Offline'] as const;
 
 export default function MonitorsListScreen() {
+  // Screen states
   const [monitors, setMonitors] = useState<AdminMonitor[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [monitorToDelete, setMonitorToDelete] = useState<AdminMonitor | null>(null);
   const [deleting, setDeleting] = useState(false);
-
   const [filter, setFilter] = useState<string>('All');
 
+  // Load monitors from backend API
   const loadMonitors = useCallback(async () => {
     try {
       setError(null);
@@ -50,12 +58,14 @@ export default function MonitorsListScreen() {
     }
   }, []);
 
+  // Reload when screen gains focus
   useFocusEffect(
     useCallback(() => {
       loadMonitors();
     }, [loadMonitors])
   );
 
+  // Pull to refresh handler
   const onRefresh = () => {
     setRefreshing(true);
     loadMonitors();

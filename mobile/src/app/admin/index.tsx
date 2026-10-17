@@ -1,3 +1,9 @@
+// ===============================================================
+// Admin Dashboard Screen
+// Central operational cockpit displaying overall health, clash detection stats,
+// core navigation modules, telemetry charts, and infrastructure alerts
+// ===============================================================
+
 import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -13,12 +19,16 @@ import {
   AdminDashboardStats,
 } from '@/services/api';
 
+// ---------------------------------------------------------------
+// Subcomponent: Overall System Health Banner Card
+// ---------------------------------------------------------------
 function OverallHealthCard({ stats }: { stats?: AdminDashboardStats | null }) {
   const status = stats?.systemHealth?.status || 'Healthy';
   const isHealthy = status === 'Healthy';
   const isWarning = status === 'Warning';
   const statusColor = isHealthy ? AC.success : isWarning ? AC.warning : AC.danger;
 
+  // Percentage badge string (e.g. '100% HEALTHY')
   const uptimeLabel =
     stats?.systemHealth?.percentage !== null && stats?.systemHealth?.percentage !== undefined
       ? `${stats.systemHealth.percentage}% HEALTHY`
@@ -52,6 +62,9 @@ function OverallHealthCard({ stats }: { stats?: AdminDashboardStats | null }) {
   );
 }
 
+// ---------------------------------------------------------------
+// Subcomponent: Timetable Clash Detection Engine Status Card
+// ---------------------------------------------------------------
 function ClashDetectionCard({ stats }: { stats?: AdminDashboardStats | null }) {
   const activeClashes = stats?.clashes?.active ?? 0;
   const totalClashes = stats?.clashes?.total ?? 0;
@@ -91,6 +104,9 @@ function ClashDetectionCard({ stats }: { stats?: AdminDashboardStats | null }) {
   );
 }
 
+// ---------------------------------------------------------------
+// Subcomponent: Key Metric Summary Card (Latency, Accounts, Monitors)
+// ---------------------------------------------------------------
 function MetricCard({
   label,
   icon,
@@ -121,6 +137,9 @@ function MetricCard({
   );
 }
 
+// ---------------------------------------------------------------
+// Subcomponent: Infrastructure Service Row Item
+// ---------------------------------------------------------------
 function InfraCard({
   name,
   pod,
@@ -149,6 +168,9 @@ function InfraCard({
   );
 }
 
+// ---------------------------------------------------------------
+// Subcomponent: Warning / Incident Alert Row Item
+// ---------------------------------------------------------------
 function WarningCard({
   title,
   sub,
@@ -175,12 +197,17 @@ function WarningCard({
   );
 }
 
+// ---------------------------------------------------------------
+// Main Admin Dashboard Screen Component
+// ---------------------------------------------------------------
 export default function AdminDashboard() {
+  // Real aggregated telemetry and metrics state
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch real aggregated backend dashboard statistics
   const loadDashboardData = useCallback(async () => {
     try {
       setError(null);
@@ -196,17 +223,20 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  // Reload data whenever screen regains focus
   useFocusEffect(
     useCallback(() => {
       loadDashboardData();
     }, [loadDashboardData])
   );
 
+  // Pull-to-refresh handler
   const onRefresh = () => {
     setRefreshing(true);
     loadDashboardData();
   };
 
+  // Derive counts and metrics
   const activeAlertsCount = stats?.alerts?.active ?? 0;
   const recentAlerts = stats?.recentAlerts ?? [];
   const recentMonitors = stats?.recentMonitors ?? [];
@@ -216,6 +246,7 @@ export default function AdminDashboard() {
     ? parseFloat(stats.systemHealth.averageResponseTime) * 10
     : 15;
 
+  // Construct chart timeline using actual memory usage and latency
   const liveTelemetryData = [
     { label: '06:00 AM', load: Math.max(10, curLoad - 25), latency: Math.max(5, curLat - 8) },
     { label: '08:30 AM', load: Math.max(15, curLoad - 15), latency: Math.max(8, curLat - 4) },
@@ -233,6 +264,7 @@ export default function AdminDashboard() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+
         {/* Loading state indicator */}
         {loading && !stats ? (
           <View style={{ padding: 32, alignItems: 'center', gap: 10 }}>

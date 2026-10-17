@@ -1,3 +1,9 @@
+// ===============================================================
+// Admin Profile Screen
+// Displays current administrator credentials, operational metrics summary,
+// module quick shortcuts, security preferences, and session termination (logout)
+// ===============================================================
+
 import React, { useCallback, useState } from 'react';
 import {
   View,
@@ -22,6 +28,7 @@ import {
   AdminDashboardStats,
 } from '@/services/api';
 
+// Admin modules navigation shortcuts
 const QUICK_LINKS = [
   { icon: '📚', label: 'Course & Timetables', sub: 'Manage courses, schedules & clashes', route: '/admin-dashboard' },
   { icon: '👥', label: 'User Management', sub: 'Manage system users', route: '/admin/users' },
@@ -30,6 +37,7 @@ const QUICK_LINKS = [
   { icon: '📊', label: 'Service Status', sub: 'View live system health', route: '/admin/service-status' },
 ];
 
+// Helper: Generates 2-letter uppercase initials from administrator's name
 function getInitials(name?: string): string {
   if (!name) return 'AD';
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -39,6 +47,7 @@ function getInitials(name?: string): string {
   return target.slice(0, 2).map(p => p[0].toUpperCase()).join('');
 }
 
+// Helper: Formats ISO date string to readable member join date (e.g., 'Jan 2024')
 function formatJoinDate(dateStr?: string): string {
   if (!dateStr) return 'Active Member';
   try {
@@ -49,6 +58,7 @@ function formatJoinDate(dateStr?: string): string {
   }
 }
 
+// Helper: Formats last login timestamp into localized date & time
 function formatLastLogin(dateStr?: string): string {
   if (!dateStr) return 'Active session';
   try {
@@ -60,7 +70,9 @@ function formatLastLogin(dateStr?: string): string {
   }
 }
 
-// ─── Sub-components ────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------
+// Subcomponent: Profile Summary Metric Stat Card
+// ---------------------------------------------------------------
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.statCard}>
@@ -69,6 +81,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
     </View>
   );
 }
+
 
 function QuickLink({
   icon,

@@ -1,3 +1,9 @@
+// ===============================================================
+// Admin System Health & Infrastructure Diagnostics Screen
+// Visualizes live server resources, node synchronization, latency trajectory,
+// and hardware load metrics from the backend Node.js OS runtime
+// ===============================================================
+
 import React, { useCallback, useState } from 'react';
 import {
   View,
@@ -23,11 +29,13 @@ import {
 } from '@/services/api';
 
 export default function SystemHealthScreen() {
+  // Real stats and telemetry states
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [healthData, setHealthData] = useState<SystemHealthData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Concurrently fetch aggregated dashboard stats and system health diagnostics
   const loadHealth = useCallback(async () => {
     try {
       const [statsRes, healthRes] = await Promise.all([
@@ -49,28 +57,33 @@ export default function SystemHealthScreen() {
     }
   }, []);
 
+  // Reload diagnostics whenever screen is focused
   useFocusEffect(
     useCallback(() => {
       loadHealth();
     }, [loadHealth])
   );
 
+  // Pull-to-refresh handler
   const onRefresh = () => {
     setRefreshing(true);
     loadHealth();
   };
 
+  // Manual diagnostics trigger button handler
   function handleManualRefresh() {
     setRefreshing(true);
     loadHealth();
     Alert.alert('Diagnostics Refreshed', 'Real system metrics updated from backend runtime.');
   }
 
+  // Derive status and styling colors
   const overallStatus = stats?.systemHealth?.status || healthData?.overallStatus || 'Healthy';
   const isHealthy = overallStatus === 'Healthy';
   const isWarning = overallStatus === 'Warning';
   const statusColor = isHealthy ? AC.success : isWarning ? AC.warning : AC.danger;
 
+  // Extract latency, load, and user counts
   const totalMonitors = stats?.monitors?.total ?? healthData?.totalMonitors ?? 0;
   const avgLatency = stats?.systemHealth?.averageResponseTime || (healthData?.averageResponseTime || '--');
   const activeAlertsCount = stats?.alerts?.active ?? healthData?.activeAlerts ?? 0;
@@ -90,6 +103,7 @@ export default function SystemHealthScreen() {
     { label: '01:00 PM', load: Math.max(20, currentLoad - 4), latency: baseLat },
     { label: 'NOW', load: currentLoad, latency: baseLat },
   ];
+
 
   return (
     <View style={styles.screen}>

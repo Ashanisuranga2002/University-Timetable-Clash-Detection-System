@@ -1,6 +1,12 @@
+// ===============================================================
+// Admin User Controller
+// Manages system users (Students, Advisors, Administrators, Coordinators, Monitors)
+// ===============================================================
+
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 
+// Sample initial user fixtures seeded if the database collection is empty
 const INITIAL_USERS = [
   {
     userId: "ADM001",
@@ -44,6 +50,7 @@ const INITIAL_USERS = [
   },
 ];
 
+// Seed default users with hashed passwords if the collection is empty
 async function ensureSeedUsers() {
   const count = await User.countDocuments();
   if (count === 0) {
@@ -57,7 +64,9 @@ async function ensureSeedUsers() {
   }
 }
 
-// GET /api/admin/users
+// ---------------------------------------------------------------
+// GET /api/admin/users: Fetch users with optional search & role/status filters
+// ---------------------------------------------------------------
 exports.getUsers = async (req, res) => {
   try {
     await ensureSeedUsers();
@@ -65,17 +74,21 @@ exports.getUsers = async (req, res) => {
     const { search, role, status } = req.query;
     const filter = {};
 
+    // Filter by user role if selected
     if (role && role !== "All") {
       filter.role = role;
     }
+    // Filter by account status (Active, Inactive, Suspended)
     if (status && status !== "All") {
       filter.status = status;
     }
+    // Search query matching across name, email, userId, or department
     if (search && search.trim()) {
       const regex = new RegExp(search.trim(), "i");
       filter.$or = [{ name: regex }, { email: regex }, { userId: regex }, { department: regex }];
     }
 
+    // Return users without exposing password hashes
     const users = await User.find(filter).select("-passwordHash").sort({ createdAt: -1 });
     return res.status(200).json({ success: true, count: users.length, data: users });
   } catch (error) {
@@ -83,7 +96,9 @@ exports.getUsers = async (req, res) => {
   }
 };
 
-// GET /api/admin/users/:id
+// ---------------------------------------------------------------
+// GET /api/admin/users/:id: Fetch single user by ID or userId
+// ---------------------------------------------------------------
 exports.getUserById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -98,14 +113,18 @@ exports.getUserById = async (req, res) => {
   }
 };
 
-// POST /api/admin/users
+// ---------------------------------------------------------------
+// POST /api/admin/users: Create a new user account
+// ---------------------------------------------------------------
 exports.createUser = async (req, res) => {
   try {
     const { userId, name, email, password, role, department, status } = req.body;
+    // Validate required fields
     if (!userId || !name || !email) {
       return res.status(400).json({ success: false, message: "User ID, Name, and Email are required" });
     }
 
+    // Check for collision on userId or email
     const existing = await User.findOne({
       $or: [{ userId: userId.trim().toUpperCase() }, { email: email.trim().toLowerCase() }],
     });
@@ -113,11 +132,13 @@ exports.createUser = async (req, res) => {
       return res.status(409).json({ success: false, message: "User ID or Email already exists" });
     }
 
+    // Securely hash provided password or assign fallback temporary password
     let passwordHash = undefined;
     const rawPass = password && password.trim() ? password.trim() : "Temp@123";
     const salt = await bcrypt.genSalt(10);
     passwordHash = await bcrypt.hash(rawPass, salt);
 
+    // Create user record
     const newUser = await User.create({
       userId: userId.trim().toUpperCase(),
       name: name.trim(),
@@ -137,7 +158,9 @@ exports.createUser = async (req, res) => {
   }
 };
 
-// PUT /api/admin/users/:id
+// ---------------------------------------------------------------
+// PUT /api/admin/users/:id: Update existing user details
+// ---------------------------------------------------------------
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -149,7 +172,9 @@ exports.updateUser = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
+    // Update name
     if (name) user.name = name.trim();
+    // Validate and update email
     if (email) {
       const emailLower = email.trim().toLowerCase();
       if (emailLower !== user.email) {
@@ -160,6 +185,7 @@ exports.updateUser = async (req, res) => {
         user.email = emailLower;
       }
     }
+    // Update password if a new one is provided
     if (password && password.trim()) {
       const salt = await bcrypt.genSalt(10);
       user.passwordHash = await bcrypt.hash(password.trim(), salt);
@@ -179,12 +205,15 @@ exports.updateUser = async (req, res) => {
   }
 };
 
-// PATCH /api/admin/users/:id/status
+// ---------------------------------------------------------------
+// PATCH /api/admin/users/:id/status: Quick-toggle user status
+// ---------------------------------------------------------------
 exports.updateUserStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
 
+    // Validate permitted status values
     if (!status || !["Active", "Inactive", "Suspended"].includes(status)) {
       return res.status(400).json({ success: false, message: "Valid status (Active, Inactive, Suspended) is required" });
     }
@@ -207,7 +236,9 @@ exports.updateUserStatus = async (req, res) => {
   }
 };
 
-// DELETE /api/admin/users/:id
+// ---------------------------------------------------------------
+// DELETE /api/admin/users/:id: Delete or soft-deactivate user account
+// ---------------------------------------------------------------
 exports.deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -219,6 +250,7 @@ exports.deleteUser = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
+    // Soft-deactivate if requested
     if (deactivateOnly === "true") {
       user.status = "Inactive";
       await user.save();
@@ -227,9 +259,11 @@ exports.deleteUser = async (req, res) => {
       return res.status(200).json({ success: true, data: userObj, message: "User deactivated successfully" });
     }
 
+    // Hard-delete record
     await User.deleteOne({ _id: user._id });
     return res.status(200).json({ success: true, message: "User deleted successfully" });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+

@@ -1,3 +1,8 @@
+// ===============================================================
+// Admin Edit Monitor Screen
+// Form allowing administrators to edit existing health check probe parameters
+// ===============================================================
+
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -21,6 +26,7 @@ import {
   updateMonitorApi,
 } from '@/services/api';
 
+// Permitted service categories
 const SERVICE_TYPES: AdminMonitor['serviceType'][] = [
   'Service',
   'Engine',
@@ -30,13 +36,16 @@ const SERVICE_TYPES: AdminMonitor['serviceType'][] = [
   'Worker',
 ];
 
+// Available ping check intervals
 const INTERVAL_OPTIONS = ['10s', '15s', '30s', '60s', '5m'];
 
+// Health status options
 const HEALTH_OPTIONS: AdminMonitor['healthStatus'][] = ['Healthy', 'Warning', 'Critical', 'Offline'];
 
 export default function EditMonitorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
+  // Screen and form states
   const [initialLoading, setInitialLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -51,6 +60,7 @@ export default function EditMonitorScreen() {
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  // Fetch current monitor settings on mount
   useEffect(() => {
     async function loadMonitor() {
       if (!id) return;
@@ -58,6 +68,7 @@ export default function EditMonitorScreen() {
         const res = await fetchMonitorByIdApi(id);
         const data: AdminMonitor = res?.data || res;
         if (data) {
+
           setMonitorId(data.monitorId);
           setServiceName(data.serviceName);
           setServiceType(data.serviceType);

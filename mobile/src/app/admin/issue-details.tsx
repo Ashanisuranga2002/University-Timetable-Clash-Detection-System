@@ -1,3 +1,9 @@
+// ===============================================================
+// Admin Incident Issue Details Screen
+// Deep dive into an individual incident alert: affected service cluster,
+// metrics gauges, impact assessment, and remediation actions
+// ===============================================================
+
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
@@ -24,8 +30,12 @@ import {
   AdminDashboardStats,
 } from '@/services/api';
 
+// Incident lifecycle states
 type IncidentState = 'active' | 'resolved' | 'monitoring' | 'acknowledged';
 
+// ---------------------------------------------------------------
+// Subcomponent: Gauge metric card for response time, load, users
+// ---------------------------------------------------------------
 function TelemetryMetricCard({
   label,
   value,
@@ -53,6 +63,7 @@ function TelemetryMetricCard({
     </View>
   );
 }
+
 
 const tmStyles = StyleSheet.create({
   card: {

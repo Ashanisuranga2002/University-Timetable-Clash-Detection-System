@@ -1,11 +1,19 @@
+// ===============================================================
+// Admin System Health Controller
+// Computes real-time system health metrics, memory usage, and service availability
+// ===============================================================
+
 const os = require("os");
 const User = require("../models/User");
 const Monitor = require("../models/Monitor");
 const Alert = require("../models/Alert");
 
-// GET /api/admin/system-health
+// ---------------------------------------------------------------
+// GET /api/admin/system-health: Aggregates system uptime, node status & resources
+// ---------------------------------------------------------------
 exports.getSystemHealth = async (req, res) => {
   try {
+    // Concurrently fetch counts and active alerts
     const [totalUsers, activeUsers, monitors, activeAlertsCount] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ status: "Active" }),
@@ -13,11 +21,13 @@ exports.getSystemHealth = async (req, res) => {
       Alert.countDocuments({ state: { $ne: "resolved" } }),
     ]);
 
+    // Compute monitor health buckets
     const totalMonitors = monitors.length;
     const onlineMonitors = monitors.filter((m) => m.status === "online" && m.enabled).length;
     const warningMonitors = monitors.filter((m) => m.status === "warning" || m.healthStatus === "Warning").length;
     const criticalMonitors = monitors.filter((m) => m.status === "offline" || m.healthStatus === "Critical").length;
 
+    // Determine high-level health state
     let overallStatus = "Healthy";
     if (criticalMonitors > 0) {
       overallStatus = "Critical";
@@ -25,7 +35,7 @@ exports.getSystemHealth = async (req, res) => {
       overallStatus = "Warning";
     }
 
-    // Average latency from real monitors
+    // Calculate average response latency across active monitors
     let totalLatency = 0;
     let latencyCount = 0;
     monitors.forEach((m) => {
@@ -37,6 +47,7 @@ exports.getSystemHealth = async (req, res) => {
     });
     const avgLatency = latencyCount > 0 ? (totalLatency / latencyCount).toFixed(2) + "s" : "--";
 
+    // Format individual services for UI cards
     const mappedServices = monitors.map((m) => ({
       id: m.monitorId || m._id,
       name: m.serviceName,
@@ -51,12 +62,14 @@ exports.getSystemHealth = async (req, res) => {
       lastChecked: m.lastChecked,
     }));
 
+    // Collect machine OS metrics (RAM, heap usage, node uptime)
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
     const memoryPercent = Math.round(((totalMem - freeMem) / totalMem) * 100);
     const heapUsedMB = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
     const uptimePct = totalMonitors > 0 ? Number(((onlineMonitors / totalMonitors) * 100).toFixed(1)) : 100;
 
+    // Return unified system health payload
     const responseData = {
       overallStatus,
       server: os.hostname() || "AU-CAMPUS-CORE-01",
@@ -83,3 +96,4 @@ exports.getSystemHealth = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+

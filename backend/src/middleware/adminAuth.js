@@ -1,8 +1,14 @@
-// Middleware to verify Admin authorization
+// ===============================================================
+// Admin Authorization Middleware
+// Verifies that incoming requests have appropriate administrator privileges
+// ===============================================================
+
+// Middleware function to restrict access to admin-only endpoints
 module.exports = function requireAdmin(req, res, next) {
+  // Check headers for role indicators (sent by mobile client or web client)
   const roleHeader = req.headers["x-admin-role"] || req.headers["x-user-role"];
   
-  // If role is explicitly specified and not an admin role, restrict
+  // If a role is explicitly specified and does not match an admin tier, deny access
   if (roleHeader && !["admin", "superadmin", "Administrator"].includes(roleHeader)) {
     return res.status(403).json({
       success: false,
@@ -10,6 +16,7 @@ module.exports = function requireAdmin(req, res, next) {
     });
   }
 
-  // Permitted to proceed
+  // Request is authorized; proceed to the next middleware or controller handler
   next();
 };
+

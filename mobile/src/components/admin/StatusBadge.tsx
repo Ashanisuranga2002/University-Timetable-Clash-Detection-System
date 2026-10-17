@@ -1,8 +1,14 @@
+// ===============================================================
+// Admin Status Badge Component
+// Compact status pill with color-coded dot indicator for operational states
+// ===============================================================
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { AC, AR } from '@/constants/adminTheme';
 import { ServiceStatus, AlertSeverity, AlertState } from '@/constants/adminMonitoringData';
 
+// Allowed variant keys for badges
 type BadgeVariant =
   | ServiceStatus
   | AlertSeverity
@@ -14,12 +20,14 @@ type BadgeVariant =
   | 'elevated'
   | 'auto-healed';
 
+// Props for StatusBadge
 interface StatusBadgeProps {
-  variant: BadgeVariant;
-  label?: string;
-  size?: 'sm' | 'md';
+  variant: BadgeVariant;   // Status style variant key
+  label?: string;          // Optional custom label text (defaults to uppercase variant)
+  size?: 'sm' | 'md';      // Badge size option ('sm' or 'md')
 }
 
+// Maps a variant key to matching background, text, and dot indicator colors
 function getColors(variant: BadgeVariant) {
   switch (variant) {
     case 'online':
@@ -51,10 +59,13 @@ function getColors(variant: BadgeVariant) {
 
 export function StatusBadge({ variant, label, size = 'md' }: StatusBadgeProps) {
   const { bg, text, dot } = getColors(variant);
+  // Default to formatted uppercase variant if no custom label provided
   const displayLabel = label ?? variant.toUpperCase().replace(/-/g, ' ');
   const isSmall = size === 'sm';
+
   return (
     <View style={[styles.badge, { backgroundColor: bg }, isSmall && styles.sm]}>
+      {/* Optional leading circular indicator dot */}
       {dot ? <View style={[styles.dot, { backgroundColor: dot }]} /> : null}
       <Text style={[styles.label, { color: text }, isSmall && styles.smText]}>
         {displayLabel}
@@ -62,6 +73,7 @@ export function StatusBadge({ variant, label, size = 'md' }: StatusBadgeProps) {
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   badge: {

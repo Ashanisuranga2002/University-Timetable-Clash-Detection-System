@@ -1,5 +1,11 @@
+// ===============================================================
+// Admin Alert Controller
+// Manages system incidents, alert filtering, acknowledgment, and resolution workflows
+// ===============================================================
+
 const Alert = require("../models/Alert");
 
+// Initial sample alert fixtures seeded if the database collection is empty
 const INITIAL_ALERTS = [
   {
     alertId: "INC-2024-8841",
@@ -67,6 +73,7 @@ const INITIAL_ALERTS = [
   },
 ];
 
+// Seed the alerts collection with sample incidents if currently empty
 async function ensureSeedAlerts() {
   const count = await Alert.countDocuments();
   if (count === 0) {
@@ -74,16 +81,20 @@ async function ensureSeedAlerts() {
   }
 }
 
-// GET /api/admin/alerts
+// ---------------------------------------------------------------
+// GET /api/admin/alerts: Fetch all alerts with optional filtering
+// ---------------------------------------------------------------
 exports.getAlerts = async (req, res) => {
   try {
     await ensureSeedAlerts();
     const { status, severity } = req.query;
     const filter = {};
 
+    // Filter by alert state (active, acknowledged, resolved, etc.)
     if (status && status !== "all") {
       filter.state = status;
     }
+    // Filter by severity level (low, medium, high, critical)
     if (severity && severity !== "all") {
       filter.severity = severity;
     }
@@ -91,12 +102,14 @@ exports.getAlerts = async (req, res) => {
     const alerts = await Alert.find(filter)
       .populate("monitorId", "serviceName healthStatus responseTime")
       .sort({ createdAt: -1 });
+
     return res.status(200).json({ success: true, count: alerts.length, data: alerts });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
+// Helper to look up an alert by either MongoDB ObjectId or alertId string
 function getAlertLookupQuery(id) {
   const cleanId = String(id || '').trim();
   const isObjectId = cleanId.length === 24 && /^[0-9a-fA-F]{24}$/.test(cleanId);
@@ -105,7 +118,9 @@ function getAlertLookupQuery(id) {
     : { alertId: cleanId };
 }
 
-// GET /api/admin/alerts/:id
+// ---------------------------------------------------------------
+// GET /api/admin/alerts/:id: Fetch specific incident details
+// ---------------------------------------------------------------
 exports.getAlertById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -122,7 +137,9 @@ exports.getAlertById = async (req, res) => {
   }
 };
 
-// PUT /api/admin/alerts/:id/status
+// ---------------------------------------------------------------
+// PUT /api/admin/alerts/:id/status: Update alert state and note
+// ---------------------------------------------------------------
 exports.updateAlertStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -135,10 +152,13 @@ exports.updateAlertStatus = async (req, res) => {
 
     if (state) alert.state = state;
     if (note) alert.resolvedNote = note;
+
+    // Track user and time for acknowledgment
     if (state === "acknowledged") {
       alert.acknowledgedAt = new Date();
       alert.acknowledgedBy = req.headers["x-admin-name"] || req.headers["x-admin-id"] || "Administrator";
     }
+    // Track user, time, and TTR for resolution
     if (state === "resolved") {
       alert.resolvedAt = new Date();
       alert.resolvedBy = req.headers["x-admin-name"] || req.headers["x-admin-id"] || "Administrator";
@@ -152,7 +172,9 @@ exports.updateAlertStatus = async (req, res) => {
   }
 };
 
-// DELETE /api/admin/alerts/:id
+// ---------------------------------------------------------------
+// DELETE /api/admin/alerts/:id: Dismiss or delete an alert
+// ---------------------------------------------------------------
 exports.deleteAlert = async (req, res) => {
   try {
     const { id } = req.params;
@@ -169,7 +191,9 @@ exports.deleteAlert = async (req, res) => {
   }
 };
 
-// PATCH /api/admin/alerts/:id/acknowledge
+// ---------------------------------------------------------------
+// PATCH /api/admin/alerts/:id/acknowledge: Acknowledge an alert
+// ---------------------------------------------------------------
 exports.acknowledgeAlert = async (req, res) => {
   try {
     const { id } = req.params;
@@ -177,6 +201,7 @@ exports.acknowledgeAlert = async (req, res) => {
     if (!alert) {
       return res.status(404).json({ success: false, message: "Alert not found" });
     }
+    // Mark as acknowledged and record actor
     alert.state = "acknowledged";
     alert.acknowledgedAt = new Date();
     alert.acknowledgedBy = req.headers["x-admin-name"] || req.headers["x-admin-id"] || "Administrator";
@@ -187,7 +212,9 @@ exports.acknowledgeAlert = async (req, res) => {
   }
 };
 
-// PATCH /api/admin/alerts/:id/resolve
+// ---------------------------------------------------------------
+// PATCH /api/admin/alerts/:id/resolve: Mark an incident as resolved
+// ---------------------------------------------------------------
 exports.resolveAlert = async (req, res) => {
   try {
     const { id } = req.params;
@@ -196,6 +223,7 @@ exports.resolveAlert = async (req, res) => {
     if (!alert) {
       return res.status(404).json({ success: false, message: "Alert not found" });
     }
+    // Set resolved metadata
     alert.state = "resolved";
     if (note) alert.resolvedNote = note;
     alert.resolvedAt = new Date();
@@ -208,7 +236,9 @@ exports.resolveAlert = async (req, res) => {
   }
 };
 
-// PATCH /api/admin/alerts/:id/reopen
+// ---------------------------------------------------------------
+// PATCH /api/admin/alerts/:id/reopen: Reopen a resolved alert
+// ---------------------------------------------------------------
 exports.reopenAlert = async (req, res) => {
   try {
     const { id } = req.params;
@@ -216,6 +246,7 @@ exports.reopenAlert = async (req, res) => {
     if (!alert) {
       return res.status(404).json({ success: false, message: "Alert not found" });
     }
+    // Reset back to active status
     alert.state = "active";
     alert.resolvedAt = null;
     alert.resolvedBy = "";
@@ -225,3 +256,4 @@ exports.reopenAlert = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+

@@ -1,3 +1,9 @@
+// ===============================================================
+// Admin Service Status Screen
+// Displays microservice fleet health, latency, uptime, and lets admins
+// trigger live ping probes against services and databases
+// ===============================================================
+
 import React, { useCallback, useState } from 'react';
 import {
   View,
@@ -22,6 +28,7 @@ import {
   SystemHealthData,
 } from '@/services/api';
 
+// Interface describing service status item structure
 interface ServiceItem {
   id: string;
   name: string;
@@ -36,6 +43,9 @@ interface ServiceItem {
   lastChecked?: string;
 }
 
+// ---------------------------------------------------------------
+// Subcomponent: Fleet Overall Status Banner Card
+// ---------------------------------------------------------------
 function OverallStatusCard({
   health,
   onRefresh,
@@ -102,6 +112,9 @@ function OverallStatusCard({
   );
 }
 
+// ---------------------------------------------------------------
+// Subcomponent: Individual Service Diagnostic Card
+// ---------------------------------------------------------------
 function ServiceCard({
   svc,
   onProbed,
@@ -109,10 +122,12 @@ function ServiceCard({
   svc: ServiceItem;
   onProbed: () => void;
 }) {
+  // State indicating if live diagnostic probe is executing
   const [probing, setProbing] = useState(false);
   const isWarning = svc.status === 'warning' || svc.healthStatus === 'Warning';
   const isOffline = svc.status === 'offline' || svc.healthStatus === 'Critical' || svc.healthStatus === 'Offline';
 
+  // Executes an on-demand probe ping check to this service's endpoint
   async function handleProbe() {
     setProbing(true);
     try {
@@ -126,6 +141,7 @@ function ServiceCard({
     }
   }
 
+  // Icons matching service category
   const iconMap: Record<string, string> = {
     'Engine': '⚙️',
     'Gateway': '🚪',
@@ -188,12 +204,16 @@ function ServiceCard({
   );
 }
 
+// ---------------------------------------------------------------
+// Main Service Status Screen Component
+// ---------------------------------------------------------------
 export default function ServiceStatusScreen() {
   const [healthData, setHealthData] = useState<SystemHealthData | null>(null);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Fetch live system health metrics and list of monitored services
   const loadServices = useCallback(async () => {
     try {
       const res = await fetchSystemHealthApi();

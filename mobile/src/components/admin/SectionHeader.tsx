@@ -1,12 +1,18 @@
+// ===============================================================
+// Admin Section Header Component
+// Standard section title row with optional right action link and badge
+// ===============================================================
+
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { AC, AS } from '@/constants/adminTheme';
 
+// Component props
 interface SectionHeaderProps {
-  title: string;
-  right?: string;
-  rightBadge?: string;
-  onRightPress?: () => void;
+  title: string;              // Section headline text
+  right?: string;             // Optional right action link label (e.g. 'View All →')
+  rightBadge?: string;        // Optional badge text next to the action link (e.g. '3 active')
+  onRightPress?: () => void;  // Callback when right action link is clicked
 }
 
 export function SectionHeader({ title, right, rightBadge, onRightPress }: SectionHeaderProps) {
@@ -16,11 +22,13 @@ export function SectionHeader({ title, right, rightBadge, onRightPress }: Sectio
       {right ? (
         <Pressable onPress={onRightPress} hitSlop={8} accessibilityRole="button">
           <View style={styles.rightRow}>
+            {/* Optional badge counter */}
             {rightBadge ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{rightBadge}</Text>
               </View>
             ) : null}
+            {/* Action link title */}
             <Text style={styles.rightText}>{right}</Text>
           </View>
         </Pressable>
@@ -28,6 +36,7 @@ export function SectionHeader({ title, right, rightBadge, onRightPress }: Sectio
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   row: {

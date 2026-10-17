@@ -1,3 +1,9 @@
+// ===============================================================
+// Admin Header Component
+// Top app bar with campus status indicator, back navigation,
+// live notification alert indicator, and admin profile avatar
+// ===============================================================
+
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,13 +12,14 @@ import { router } from 'expo-router';
 import { AC, AS } from '@/constants/adminTheme';
 import { fetchAlertsApi } from '@/services/api';
 
+// Props accepted by the AdminHeader component
 interface AdminHeaderProps {
-  title: string;
-  showCampus?: boolean;
-  showBack?: boolean;
-  onBack?: () => void;
-  onNotification?: () => void;
-  onProfile?: () => void;
+  title: string;                 // Screen title heading
+  showCampus?: boolean;          // Whether to display the campus dot subtitle
+  showBack?: boolean;            // Whether to show back navigation button
+  onBack?: () => void;           // Custom back button press handler
+  onNotification?: () => void;   // Custom notification bell press handler
+  onProfile?: () => void;        // Custom profile avatar press handler
 }
 
 export function AdminHeader({
@@ -24,13 +31,15 @@ export function AdminHeader({
   onProfile,
 }: AdminHeaderProps) {
   const insets = useSafeAreaInsets();
+  // State for administrator initial avatar letter (defaults to 'A')
   const [initial, setInitial] = useState('A');
+  // State indicating if unhandled active alerts exist
   const [hasAlerts, setHasAlerts] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
-    // Load admin initial from real session
+    // 1. Load active admin name from local storage to display first initial
     AsyncStorage.getItem('current_admin_user')
       .then(raw => {
         if (raw && isMounted) {
@@ -45,7 +54,7 @@ export function AdminHeader({
       })
       .catch(() => {});
 
-    // Check for active alerts
+    // 2. Query active alerts to toggle notification bell red dot badge
     fetchAlertsApi({ status: 'active' })
       .then(res => {
         if (res && res.data && isMounted) {
@@ -60,6 +69,7 @@ export function AdminHeader({
     };
   }, []);
 
+  // Back button handler: custom callback or navigate back in router stack
   const handleBack = () => {
     if (onBack) {
       onBack();
@@ -70,15 +80,18 @@ export function AdminHeader({
     }
   };
 
+  // Notification bell click: opens alerts screen
   const handleNotification = () => {
     if (onNotification) onNotification();
     else router.push('/admin/alerts' as any);
   };
 
+  // Profile avatar click: opens admin profile screen
   const handleProfile = () => {
     if (onProfile) onProfile();
     else router.push('/admin/profile' as any);
   };
+
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + 8 }]}>

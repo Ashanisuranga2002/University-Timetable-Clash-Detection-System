@@ -1,3 +1,9 @@
+// ===============================================================
+// Admin Users List Screen
+// User directory with real-time text search, role filtering, status filtering,
+// deletion confirmation modal, and navigation to user details or creation form
+// ===============================================================
+
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
@@ -16,21 +22,27 @@ import { AdminHeader } from '@/components/admin/AdminHeader';
 import { AC, AR, AS } from '@/constants/adminTheme';
 import { AdminUser, deleteUserApi, fetchUsersApi } from '@/services/api';
 
+// Available user role categories
 const ROLES = ['All', 'Student', 'Academic Advisor', 'Monitor', 'Coordinator', 'Administrator'] as const;
+
+// Account status filter categories
 const STATUSES = ['All', 'Active', 'Inactive', 'Suspended'] as const;
 
 export default function UsersListScreen() {
+  // Screen state
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Search and filter controls
   const [search, setSearch] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('All');
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
   const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Fetch users with active query parameters
   const loadUsers = useCallback(async () => {
     try {
       setError(null);
@@ -52,11 +64,13 @@ export default function UsersListScreen() {
     }
   }, [search, selectedRole, selectedStatus]);
 
+  // Reload data when screen regains focus
   useFocusEffect(
     useCallback(() => {
       loadUsers();
     }, [loadUsers])
   );
+
 
   const onRefresh = () => {
     setRefreshing(true);

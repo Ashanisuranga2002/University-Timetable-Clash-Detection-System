@@ -1,3 +1,8 @@
+// ===============================================================
+// Admin Add User Screen
+// Form for creating a new user account with role selection, department, and password
+// ===============================================================
+
 import React, { useState } from 'react';
 import {
   View,
@@ -16,6 +21,7 @@ import { AdminHeader } from '@/components/admin/AdminHeader';
 import { AC, AR, AS } from '@/constants/adminTheme';
 import { createUserApi, AdminUser } from '@/services/api';
 
+// Available system roles for new account assignment
 const AVAILABLE_ROLES: AdminUser['role'][] = [
   'Student',
   'Academic Advisor',
@@ -24,9 +30,11 @@ const AVAILABLE_ROLES: AdminUser['role'][] = [
   'Administrator',
 ];
 
+// Available account statuses
 const AVAILABLE_STATUSES: AdminUser['status'][] = ['Active', 'Inactive', 'Suspended'];
 
 export default function AddUserScreen() {
+  // Form input field states
   const [userId, setUserId] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -38,6 +46,7 @@ export default function AddUserScreen() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  // Input validation for required fields and valid email syntax
   const validate = () => {
     const newErrors: { [key: string]: string } = {};
 
