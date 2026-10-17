@@ -1,4 +1,5 @@
 const Registration = require("../models/Registration");
+const Course = require("../models/Course");
 const Clash = require("../models/Clash");
 const StudentRequest = require("../models/StudentRequest");
 const { resolveStudent } = require("../utils/studentResolver");

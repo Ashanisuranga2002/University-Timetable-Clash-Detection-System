@@ -202,6 +202,8 @@ export default function TimetablePreviewScreen() {
 
         setEvents(newEvents);
         const localClashes: any[] = [];
+        const clashingEventIds = new Set<string>();
+
         for (let i = 0; i < newEvents.length; i += 1) {
           for (let j = i + 1; j < newEvents.length; j += 1) {
             const first = newEvents[i];
@@ -210,22 +212,61 @@ export default function TimetablePreviewScreen() {
             const overlapStart = Math.max(first.startMinutes, second.startMinutes);
             const overlapEnd = Math.min(first.endMinutes, second.endMinutes);
             if (overlapStart >= overlapEnd) continue;
+
+            clashingEventIds.add(first.id);
+            clashingEventIds.add(second.id);
+
             localClashes.push({
               course1Code: first.course,
               course1Name: first.course,
               course2Code: second.course,
               course2Name: second.course,
               day: first.dayName || first.day,
-              startTime: formatPreviewTime(first.startMinutes),
-              endTime: formatPreviewTime(first.endMinutes),
+              startTime: formatPreviewTime(overlapStart),
+              endTime: formatPreviewTime(overlapEnd),
+              session1Time: `${formatPreviewTime(first.startMinutes)} - ${formatPreviewTime(first.endMinutes)}`,
+              session2Time: `${formatPreviewTime(second.startMinutes)} - ${formatPreviewTime(second.endMinutes)}`,
               room1: first.room,
               room2: second.room,
-              course1Group: first.group,
-              course2Group: second.group,
+              course1Group: first.group || first.type,
+              course2Group: second.group || second.type,
               overlapMinutes: overlapEnd - overlapStart,
             });
           }
         }
+
+        // Layout calculation for events on each day (side-by-side if overlapping)
+        const dayEventsMap: Record<string, any[]> = {};
+        newEvents.forEach((ev) => {
+          ev.isClash = clashingEventIds.has(ev.id);
+          if (!dayEventsMap[ev.day]) dayEventsMap[ev.day] = [];
+          dayEventsMap[ev.day].push(ev);
+        });
+
+        Object.values(dayEventsMap).forEach((dayEvents) => {
+          dayEvents.sort((a, b) => a.startMinutes - b.startMinutes);
+          for (let i = 0; i < dayEvents.length; i++) {
+            const evA = dayEvents[i];
+            let maxCol = 1;
+            let myCol = 0;
+            for (let j = 0; j < dayEvents.length; j++) {
+              if (i === j) continue;
+              const evB = dayEvents[j];
+              const oStart = Math.max(evA.startMinutes, evB.startMinutes);
+              const oEnd = Math.min(evA.endMinutes, evB.endMinutes);
+              if (oStart < oEnd) {
+                maxCol = Math.max(maxCol, 2);
+                if (j < i) {
+                  myCol = (evB.colIndex ?? 0) + 1;
+                }
+              }
+            }
+            evA.colIndex = myCol;
+            evA.colTotal = maxCol;
+          }
+        });
+
+        setEvents(newEvents);
         setClashes(localClashes);
         setHasClashes(localClashes.length > 0);
         setPreviewLoaded(true);
@@ -382,9 +423,14 @@ export default function TimetablePreviewScreen() {
                 if (dayIndex === -1) return null;
 
                 const topPosition = (event.startMinutes / 60 - gridStartHour) * ROW_HEIGHT;
-                const blockHeight = event.durationMinutes / 60 * ROW_HEIGHT;
-                const leftPosition = `${(dayIndex / DAYS.length) * 100}%`;
-                const blockWidth = `${(1 / DAYS.length) * 100}%`;
+                const blockHeight = (event.durationMinutes / 60) * ROW_HEIGHT;
+
+                const colTotal = event.colTotal || 1;
+                const colIdx = event.colIndex || 0;
+                const dayWidth = 100 / DAYS.length;
+                const subWidth = dayWidth / colTotal;
+                const leftPos = (dayIndex * dayWidth) + (colIdx * subWidth);
+                const isClashing = Boolean(event.isClash);
 
                 return (
                   <View 
@@ -394,20 +440,28 @@ export default function TimetablePreviewScreen() {
                       {
                         top: topPosition,
                         height: blockHeight,
-                        left: leftPosition as any,
-                        width: blockWidth as any,
-                        backgroundColor: event.color,
-                        borderColor: event.borderColor,
+                        left: `${leftPos}%` as any,
+                        width: `${subWidth}%` as any,
+                        backgroundColor: isClashing ? '#FEF3F2' : event.color,
+                        borderColor: isClashing ? '#D92D20' : event.borderColor,
+                        borderWidth: isClashing ? 1.5 : 1,
+                        zIndex: isClashing ? 10 : 1,
                       }
                     ]}
                   >
-                    <Text style={[styles.eventCourse, { color: '#101828' }]} numberOfLines={1}>
+                    {isClashing && (
+                      <View style={styles.clashPill}>
+                        <Ionicons name="warning" size={9} color="#B42318" />
+                        <Text style={styles.clashPillText}>CLASH</Text>
+                      </View>
+                    )}
+                    <Text style={[styles.eventCourse, { color: isClashing ? '#B42318' : '#101828' }]} numberOfLines={1}>
                       {event.course} {event.type ? `• ${event.type}` : ''}
                     </Text>
-                    <Text style={{ fontSize: 9, color: '#475467', marginTop: 2 }} numberOfLines={1}>
+                    <Text style={{ fontSize: 9, color: isClashing ? '#912018' : '#475467', marginTop: 1 }} numberOfLines={1}>
                       {event.day} {formatTime(event.startMinutes)} - {formatTime(event.startMinutes + event.durationMinutes)}
                     </Text>
-                    <Text style={[styles.eventRoom, { color: event.textColor, marginTop: 2 }]} numberOfLines={1}>
+                    <Text style={[styles.eventRoom, { color: isClashing ? '#B42318' : event.textColor, marginTop: 1 }]} numberOfLines={1}>
                       {event.room}
                     </Text>
                   </View>
@@ -417,7 +471,7 @@ export default function TimetablePreviewScreen() {
           </View>
         </View>
 
-        {/* Status Banner */}
+        {/* Status Banner & Clash Breakdown */}
         {!previewLoaded ? (
           <View style={[styles.successBanner, { backgroundColor: '#FEF3F2', borderColor: '#FECDCA' }]}>
             <Ionicons name="alert-circle" size={20} color="#D92D20" />
@@ -438,9 +492,48 @@ export default function TimetablePreviewScreen() {
             </TouchableOpacity>
           </View>
         ) : hasClashes ? (
-          <View style={[styles.successBanner, { backgroundColor: '#FEF3F2', borderColor: '#FECDCA' }]}>
-            <Ionicons name="alert-circle" size={20} color="#D92D20" />
-            <Text style={[styles.successBannerText, { color: '#B42318' }]}>Conflicts detected in your timetable. Please review.</Text>
+          <View style={styles.clashDetailsContainer}>
+            <View style={styles.clashBannerHeader}>
+              <View style={styles.clashBannerIconBg}>
+                <Ionicons name="warning" size={20} color="#D92D20" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.clashBannerTitle}>
+                  {clashes.length} Timetable Clash{clashes.length > 1 ? 'es' : ''} Detected
+                </Text>
+                <Text style={styles.clashBannerSubtitle}>
+                  Conflicting slots are highlighted in red on the grid. Simultaneous attendance is impossible.
+                </Text>
+              </View>
+              <View style={styles.criticalPill}>
+                <Text style={styles.criticalPillText}>CLASH</Text>
+              </View>
+            </View>
+
+            {clashes.map((clash, idx) => (
+              <View key={idx} style={styles.clashCard}>
+                <View style={styles.clashCardHeader}>
+                  <Text style={styles.clashCardDay}>
+                    {clash.day.toUpperCase()} • {clash.startTime} - {clash.endTime} ({clash.overlapMinutes} MIN OVERLAP)
+                  </Text>
+                </View>
+                <View style={styles.clashCardBody}>
+                  <View style={styles.clashCourseBox}>
+                    <Text style={styles.clashCourseCode}>{clash.course1Code}</Text>
+                    <Text style={styles.clashCourseGroup}>{clash.course1Group || 'Class'}</Text>
+                    <Text style={styles.clashCourseRoom}>Room: {clash.room1 || 'TBA'}</Text>
+                  </View>
+                  <View style={styles.clashVsPill}>
+                    <Text style={styles.clashVsText}>VS</Text>
+                  </View>
+                  <View style={[styles.clashCourseBox, styles.clashCourseBoxRight]}>
+                    <Text style={styles.clashCourseCode}>{clash.course2Code}</Text>
+                    <Text style={styles.clashCourseGroup}>{clash.course2Group || 'Class'}</Text>
+                    <Text style={styles.clashCourseRoom}>Room: {clash.room2 || 'TBA'}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
           </View>
         ) : isConflictFreePreview ? (
           <View style={[styles.successBanner, { backgroundColor: '#ECFDF3', borderColor: '#A6F4C5' }]}>
@@ -467,7 +560,7 @@ export default function TimetablePreviewScreen() {
               ) : (
                  <Text style={styles.primaryButtonText}>
                    {hasClashes
-                     ? 'Choose Another Group'
+                     ? 'Resolve Timetable Conflict'
                      : isConflictFreePreview
                        ? 'Confirm & Continue to Advisor Request'
                        : 'Confirm Registration'}
@@ -514,6 +607,8 @@ const styles = StyleSheet.create({
   eventBlock: { position: 'absolute', borderWidth: 1, borderRadius: 6, padding: 4, margin: 1, overflow: 'hidden' },
   eventCourse: { fontSize: 10, fontWeight: '700' },
   eventRoom: { fontSize: 10, fontWeight: '500', marginBottom: 2 },
+  clashPill: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#FEE4E2', paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3, alignSelf: 'flex-start', marginBottom: 2 },
+  clashPillText: { fontSize: 8, fontWeight: '800', color: '#B42318' },
   successBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#ECFDF3', borderColor: '#A6F4C5', borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 24 },
   successBannerText: { marginLeft: 8, color: '#027A48', fontWeight: '600', fontSize: 14 },
   buttonRow: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -521,4 +616,22 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: '#344054', fontWeight: '600', fontSize: 14 },
   primaryButton: { flex: 1, paddingVertical: 16, borderRadius: 8, backgroundColor: '#4A3AFF', alignItems: 'center', marginLeft: 8 },
   primaryButtonText: { color: '#FFFFFF', fontWeight: '600', fontSize: 14 },
+  clashDetailsContainer: { backgroundColor: '#FEF3F2', borderWidth: 1, borderColor: '#FECDCA', borderRadius: 12, padding: 14, marginBottom: 20 },
+  clashBannerHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  clashBannerIconBg: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FEE4E2', alignItems: 'center', justifyContent: 'center' },
+  clashBannerTitle: { fontSize: 15, fontWeight: '700', color: '#B42318' },
+  clashBannerSubtitle: { fontSize: 12, color: '#7A271A', marginTop: 2 },
+  criticalPill: { backgroundColor: '#B42318', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 12 },
+  criticalPillText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  clashCard: { backgroundColor: '#FFFFFF', borderRadius: 8, borderWidth: 1, borderColor: '#FECDCA', padding: 10, marginTop: 8 },
+  clashCardHeader: { borderBottomWidth: 1, borderBottomColor: '#F2F4F7', paddingBottom: 6, marginBottom: 8 },
+  clashCardDay: { fontSize: 11, fontWeight: '700', color: '#B42318', letterSpacing: 0.5 },
+  clashCardBody: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  clashCourseBox: { flex: 1, backgroundColor: '#F9FAFB', padding: 8, borderRadius: 6, borderWidth: 1, borderColor: '#EAECF0' },
+  clashCourseBoxRight: { backgroundColor: '#FEF6EE', borderColor: '#F9DBAF' },
+  clashCourseCode: { fontSize: 13, fontWeight: '700', color: '#101828' },
+  clashCourseGroup: { fontSize: 11, fontWeight: '600', color: '#475467', marginTop: 2 },
+  clashCourseRoom: { fontSize: 10, color: '#667085', marginTop: 2 },
+  clashVsPill: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#FEE4E2', alignItems: 'center', justifyContent: 'center', marginHorizontal: 8 },
+  clashVsText: { fontSize: 10, fontWeight: '800', color: '#B42318' },
 });

@@ -87,9 +87,14 @@ exports.getAllRequests = async (req, res) => {
 exports.getStudentRequests = async (req, res) => {
     try {
         const { studentId } = req.params;
+        if (!studentId) {
+            return res.status(400).json({ message: 'Student ID is required' });
+        }
         
-        // Find all requests matching the student ID and sort by newest first
-        const requests = await StudentRequest.find({ studentId }).sort({ createdAt: -1 });
+        // Find all requests matching the student ID (case-insensitive) and sort by newest first
+        const requests = await StudentRequest.find({
+            studentId: { $regex: new RegExp(`^${studentId.trim()}$`, 'i') }
+        }).sort({ createdAt: -1 });
         
         res.status(200).json(requests);
     } catch (error) {
@@ -113,34 +118,42 @@ exports.getRequestById = async (req, res) => {
     }
 };
 
-// UPDATE: Edit a request that has not yet been reviewed
+// UPDATE: Edit a request that has not yet been reviewed (approved/rejected)
 exports.updateRequest = async (req, res) => {
     try {
         const { id } = req.params;
-        const { studentId, requestedGroup, reason } = req.body;
+        const { studentId, requestedGroup, reason, conflictDetails } = req.body;
         if (!studentId) {
             return res.status(400).json({ message: 'Student ID is required' });
         }
 
-        const request = await StudentRequest.findOne({ _id: id, studentId });
+        const request = await StudentRequest.findOne({
+            _id: id,
+            studentId: { $regex: new RegExp(`^${studentId.trim()}$`, 'i') }
+        });
 
         if (!request) {
             return res.status(404).json({ message: 'Request not found' });
         }
 
-        // 2. Enforce the business rule: Only allow updates if the status is PENDING
-        if (request.status !== 'PENDING' || request.workflowStatus !== 'PENDING_COORDINATOR') {
+        // Rule: Only allow updates before the request is approved or rejected by the advisor
+        const isFinalized = request.status === 'APPROVED' || request.status === 'REJECTED' ||
+                            request.lastDecision === 'APPROVED' || request.lastDecision === 'REJECTED';
+        if (isFinalized) {
             return res.status(403).json({ 
-                message: `Cannot update request. The advisor has already ${request.status.toLowerCase()} it.` 
+                message: `Cannot update request. The advisor has already ${request.lastDecision?.toLowerCase() || request.status.toLowerCase()} it.` 
             });
         }
 
-        // 3. Apply the updates
+        // Apply updates
         if (typeof requestedGroup === 'string' && requestedGroup.trim()) {
             request.requestedGroup = requestedGroup.trim();
         }
         if (typeof reason === 'string' && reason.trim()) {
             request.reason = reason.trim();
+        }
+        if (typeof conflictDetails === 'string' && conflictDetails.trim()) {
+            request.conflictDetails = conflictDetails.trim();
         }
 
         const updatedRequest = await request.save();
@@ -150,7 +163,7 @@ exports.updateRequest = async (req, res) => {
     }
 };
 
-// DELETE: Cancel a pending request
+// DELETE: Cancel a pending request before it is approved or rejected
 exports.deleteRequest = async (req, res) => {
     try {
         const { id } = req.params;
@@ -159,21 +172,35 @@ exports.deleteRequest = async (req, res) => {
             return res.status(400).json({ message: 'Student ID is required' });
         }
 
-        const request = await StudentRequest.findOne({ _id: id, studentId });
+        const request = await StudentRequest.findOne({
+            _id: id,
+            studentId: { $regex: new RegExp(`^${studentId.trim()}$`, 'i') }
+        });
 
         if (!request) {
             return res.status(404).json({ message: 'Request not found' });
         }
 
-        // 2. Enforce the business rule: Only allow deletion if the status is PENDING
-        if (request.status !== 'PENDING' || request.workflowStatus !== 'PENDING_COORDINATOR') {
+        // Rule: Only allow deletion if the request has not yet been approved or rejected
+        const isFinalized = request.status === 'APPROVED' || request.status === 'REJECTED' ||
+                            request.lastDecision === 'APPROVED' || request.lastDecision === 'REJECTED';
+        if (isFinalized) {
             return res.status(403).json({ 
-                message: 'This request is already being processed and cannot be deleted.'
+                message: 'This request has already been reviewed by the advisor and cannot be deleted.'
             });
         }
 
-        // 3. Delete the document
-        await StudentRequest.deleteOne({ _id: id, studentId });
+        // Delete the request document
+        await StudentRequest.deleteOne({ _id: id });
+
+        // Clean up any linked draft advisor review
+        try {
+            const AdvisorReview = require('../models/AdvisorReview');
+            if (AdvisorReview) {
+                await AdvisorReview.deleteMany({ requestId: id });
+            }
+        } catch (_) {}
+
         res.status(200).json({ message: 'Request cancelled successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Error deleting request', error: error.message });

@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { fetchDashboardApi } from '../services/api';
 import { FooterTab } from '../components/FooterTab';
 
@@ -406,7 +407,16 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          <View style={styles.statCard}>
+          <TouchableOpacity
+            style={styles.statCard}
+            onPress={() =>
+              router.push({
+                pathname: '/Student/timetable-preview',
+                params: { studentId },
+              })
+            }
+            activeOpacity={0.8}
+          >
             <View style={styles.statHeader}>
               <Text style={styles.statLabel}>Timetable</Text>
 
@@ -461,8 +471,32 @@ export default function DashboardScreen() {
                 {clashes.hasClashes ? 'Action needed' : 'Optimal'}
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
+
+        {clashes.hasClashes && (
+          <TouchableOpacity
+            style={styles.clashAlertBanner}
+            onPress={() =>
+              router.push({
+                pathname: '/Student/timetable-preview',
+                params: { studentId },
+              })
+            }
+            activeOpacity={0.85}
+          >
+            <View style={styles.clashAlertIconWrap}>
+              <Ionicons name="warning" size={20} color="#D92D20" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.clashAlertTitle}>Timetable Conflict Detected</Text>
+              <Text style={styles.clashAlertSubtitle}>
+                Schedule overlap detected for enrolled courses. Tap to view timetable conflicts.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#D92D20" />
+          </TouchableOpacity>
+        )}
 
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>Enrolled Schedule</Text>
@@ -534,13 +568,22 @@ export default function DashboardScreen() {
         <Text style={styles.sectionTitle}>Quick Services</Text>
 
         <View style={styles.quickGrid}>
-          <View style={styles.quickCard}>
+          <TouchableOpacity
+            style={styles.quickCard}
+            onPress={() =>
+              router.push({
+                pathname: '/Student/timetable-preview',
+                params: { studentId },
+              })
+            }
+            activeOpacity={0.8}
+          >
             <View style={styles.quickIconPurple}>
               <Text style={styles.quickGlyphPurple}>T</Text>
             </View>
 
             <Text style={styles.quickLabel}>Timetable</Text>
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.quickCard}>
             <View style={styles.quickIconGreen}>
@@ -1254,5 +1297,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#111827',
+  },
+
+  clashAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3F2',
+    borderWidth: 1.5,
+    borderColor: '#FECDCA',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12,
+  },
+  clashAlertIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEE4E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clashAlertTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#B42318',
+  },
+  clashAlertSubtitle: {
+    fontSize: 12,
+    color: '#7A271A',
+    marginTop: 2,
   },
 });
